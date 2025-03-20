@@ -1,5 +1,6 @@
 import argparse
 from itertools import chain, combinations_with_replacement, permutations, product
+import time
 from z3 import And, Bool, Implies, Int, Not, Or, PbEq, Solver, sat
 
 # Symmetry breaking strategies:
@@ -66,6 +67,8 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     print(f'    Total blocks: {num_blocks}')
     print(f'    Labels: [0, {num_labels})')
 
+    formulation_start_time = time.process_time()
+
     s = Solver()
 
     # Variables to solve for, organized into convenient arrays that reflect the pyramid geometry.
@@ -122,8 +125,16 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
         xvar, yvar, hvar = coord_to_vars(base // 2, base // 2, 0)
         s.add(Or(And(xvar==0, yvar==0, hvar==0), And(xvar==0, yvar==0, hvar==1), And(xvar==0, yvar==1, hvar==2)))
 
+    solver_start_time = time.process_time()
+    formulation_elapsed_time = solver_start_time - formulation_start_time
+    print()
+    print(f'Constraint formulation built in {formulation_elapsed_time:.2f} seconds.')
+
     # Solve the model.
     solver_result = s.check()
+    solver_elapsed_time = time.process_time() - solver_start_time
+
+    print(f'Solver finished in {solver_elapsed_time:.2f} seconds')
 
     if solver_result == sat:
         # The pyramid is solvable for num_levels.
