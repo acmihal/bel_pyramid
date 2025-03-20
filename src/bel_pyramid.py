@@ -13,14 +13,14 @@ def x_ivar(x, h):
 def y_ivar(y, h):
     return Int(f'y{y}_h{h}')
 
-def z_ivar(x, y):
+def h_ivar(x, y):
     return Int(f'x{x}_y{y}');
 
 def block_coordinate_bvar(block, x, y, h):
     return Bool(f'b{block}_x{x}_y{y}_h{h}')
 
 def pretty_list(some_list):
-    return ' '.join([f'{item:>2}' for item in some_list if item is not None])
+    return ' '.join([f'{item:>2}' if isinstance(item, int) else '  ' for item in some_list])
 
 def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     print(f'Solving for {num_levels} levels.')
@@ -53,8 +53,11 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     # This inverts the rotated_block_list.
     rotation_to_block = {rotation: block for block, rotation_list in enumerate(rotated_block_list) for rotation in rotation_list}
 
-    # Number of block faces with each digit.
-    faces_per_digit = sum(block.count(0) for block in block_list)
+    # List of block_ix's that do not have a label.
+    blocks_without_label = [[block_ix for block_ix in range(num_blocks) if label not in block_list[block_ix]] for label in range(num_labels)]
+
+    # List of all xyh coordinates in the pyramid.
+    xyh_list = [(x, y, h) for x, y in product(range(base), range(base)) for h in range(min(height_at_xy[x], height_at_xy[y]))]
 
     print()
     print('Parameters:')
@@ -62,70 +65,62 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     print(f'    Level blocks: {blocks_at_level}')
     print(f'    Total blocks: {num_blocks}')
     print(f'    Labels: [0, {num_labels})')
-    #print(f'    Blocks:');
-    #for block_ix, block in enumerate(block_list):
-    #    print(f'        ix={block_ix} block={block}')
-    #print(f'    Faces per digit: {faces_per_digit}')
 
     s = Solver()
 
     # Variables to solve for, organized into convenient arrays that reflect the pyramid geometry.
-    zvar_matrix = [[z_ivar(x, y) for x in range(base)] for y in range(base)]
-    yvar_triangle = [[y_ivar(y, h) for h in range(height_at_xy[y])] for y in range(base)]
     xvar_triangle = [[x_ivar(x, h) for h in range(height_at_xy[x])] for x in range(base)]
+    yvar_triangle = [[y_ivar(y, h) for h in range(height_at_xy[y])] for y in range(base)]
+    hvar_matrix = [[h_ivar(x, y) for x in range(base)] for y in range(base)]
+
+    # Helper to convert coordinates to axis label vars.
+    def coord_to_vars(x, y, h):
+        return xvar_triangle[x][h], yvar_triangle[y][h], hvar_matrix[y][x]
 
     # Each xvar/yvar/zvar must have a label in [0, num_labels).
-    s.add([And(0 <= var, var < num_labels) for var in chain.from_iterable(zvar_matrix + yvar_triangle + xvar_triangle)])
+    s.add([And(0 <= var, var < num_labels) for var in chain.from_iterable(xvar_triangle + yvar_triangle + hvar_matrix)])
 
     # Each block must have exactly one coordinate.
-    s.add([PbEq([(block_coordinate_bvar(block_ix, x, y, h), 1)
-                 for x in range(base)
-                 for y in range(base)
-                 for h in range(min(height_at_xy[x], height_at_xy[y]))], 1)
-           for block_ix in range(num_blocks)])
+    s.add([PbEq([(block_coordinate_bvar(block_ix, x, y, h), 1) for x,y,h in xyh_list], 1) for block_ix in range(num_blocks)])
 
     # Each coordinate must have exactly one block.
-    s.add([PbEq([(block_coordinate_bvar(block_ix, x, y, h), 1) for block_ix in range(num_blocks)], 1)
-           for x in range(base)
-           for y in range(base)
-           for h in range(min(height_at_xy[x], height_at_xy[y]))])
+    s.add([PbEq([(block_coordinate_bvar(block_ix, x, y, h), 1) for block_ix in range(num_blocks)], 1) for x,y,h in xyh_list])
 
     # Each xvar/yvar/zvar combination implies a block at a coordinate.
-    for x, y in product(range(base), range(base)):
-        zvar = zvar_matrix[y][x]
-        for h, (xvar, yvar) in enumerate(zip(xvar_triangle[x], yvar_triangle[y])):
-            #print(f'y={y} x={x} h={h} zvar={zvar} xvar={xvar} yvar={yvar}')
-            for xlabel, ylabel, zlabel in product(range(num_labels), range(num_labels), range(num_labels)):
-                block_ix = rotation_to_block[(xlabel, ylabel, zlabel)]
-                s.add(Implies(And(xvar==xlabel, yvar==ylabel, zvar==zlabel), block_coordinate_bvar(block_ix, x, y, h)))
+    for x,y,h in xyh_list:
+        xvar, yvar, hvar = coord_to_vars(x, y, h)
 
-            # One-axis shortcuts:
-            for label in range(num_labels):
-                blocks_without_label = [block_ix for block_ix in range(num_blocks) if label not in block_list[block_ix]]
-                s.add(Implies(Or(xvar==label, yvar==label, zvar==label), Not(Or([block_coordinate_bvar(block_ix, x, y ,h) for block_ix in blocks_without_label]))))
+        # Assigning all three axis vars implies a specific block at this coordinate.
+        for xlabel, ylabel, zlabel in product(range(num_labels), range(num_labels), range(num_labels)):
+            block_ix = rotation_to_block[(xlabel, ylabel, zlabel)]
+            s.add(Implies(And(xvar==xlabel, yvar==ylabel, hvar==zlabel), block_coordinate_bvar(block_ix, x, y, h)))
 
-            # Two-axis shortcuts:
-            for label in range(num_labels):
-                blocks_without_two = [block_ix for block_ix in range(num_blocks) if block_list[block_ix].count(label) < 2]
-                s.add(Implies(And(xvar==label, yvar==label), Not(Or([block_coordinate_bvar(block_ix, x, y ,h) for block_ix in blocks_without_two]))))
-                s.add(Implies(And(xvar==label, zvar==label), Not(Or([block_coordinate_bvar(block_ix, x, y ,h) for block_ix in blocks_without_two]))))
-                s.add(Implies(And(yvar==label, zvar==label), Not(Or([block_coordinate_bvar(block_ix, x, y ,h) for block_ix in blocks_without_two]))))
+        # Any single axis var assignment implies blocks without that label cannot be at this coordinate.
+        s.add([Implies(Or(xvar==label, yvar==label, hvar==label),
+                       Not(Or([block_coordinate_bvar(block_ix, x, y, h) for block_ix in bad_block_list])))
+               for label, bad_block_list in enumerate(blocks_without_label)])
+
+        # Two-axis shortcuts:
+        #for label in range(num_labels):
+        #    blocks_without_two = [block_ix for block_ix in range(num_blocks) if block_list[block_ix].count(label) < 2]
+        #    s.add(Implies(And(xvar==label, yvar==label), Not(Or([block_coordinate_bvar(block_ix, x, y ,h) for block_ix in blocks_without_two]))))
+        #    s.add(Implies(And(xvar==label, zvar==label), Not(Or([block_coordinate_bvar(block_ix, x, y ,h) for block_ix in blocks_without_two]))))
+        #    s.add(Implies(And(yvar==label, zvar==label), Not(Or([block_coordinate_bvar(block_ix, x, y ,h) for block_ix in blocks_without_two]))))
 
     # Any xvar/yvar/zvar assignment consumes a number of faces_per_digit.
-    for label in range(num_labels):
-        s.add(PbEq([(zvar_matrix[y][x] == label, min(height_at_xy[x], height_at_xy[y])) for x, y in product(range(base), range(base))]
-                   + [(yvar == label, size_at_level[num_levels - 1 - h]) for yvar_list in yvar_triangle for h, yvar in enumerate(yvar_list)]
-                   + [(xvar == label, size_at_level[num_levels - 1 - h]) for xvar_list in xvar_triangle for h, xvar in enumerate(xvar_list)],
-                   faces_per_digit))
+    #faces_per_digit = sum(block.count(0) for block in block_list)
+    #for label in range(num_labels):
+    #    s.add(PbEq([(zvar_matrix[y][x] == label, min(height_at_xy[x], height_at_xy[y])) for x, y in product(range(base), range(base))]
+    #               + [(yvar == label, size_at_level[num_levels - 1 - h]) for yvar_list in yvar_triangle for h, yvar in enumerate(yvar_list)]
+    #               + [(xvar == label, size_at_level[num_levels - 1 - h]) for xvar_list in xvar_triangle for h, xvar in enumerate(xvar_list)],
+    #               faces_per_digit))
 
     # Symmetry breaking constraints:
 
     if symmetry_breaking_strategy == StrategyBottomCenter012:
         # Constrain the xyz labels of the bottom center block to be 000, 001, or 012.
-        zvar = zvar_matrix[base // 2][base // 2]
-        xvar = xvar_triangle[base // 2][0]
-        yvar = yvar_triangle[base // 2][0]
-        s.add(Or(And(xvar==0, yvar==0, zvar==0), And(xvar==0, yvar==0, zvar==1), And(xvar==0, yvar==1, zvar==2)))
+        xvar, yvar, hvar = coord_to_vars(base // 2, base // 2, 0)
+        s.add(Or(And(xvar==0, yvar==0, hvar==0), And(xvar==0, yvar==0, hvar==1), And(xvar==0, yvar==1, hvar==2)))
 
     # Solve the model.
     solver_result = s.check()
@@ -134,20 +129,22 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
         # The pyramid is solvable for num_levels.
         m = s.model()
 
+        # Obtain the integer values of the axis labels from the model.
+        xint_triangle = [[m.eval(var).as_long() for var in xvar_list] for xvar_list in xvar_triangle]
+        yint_triangle = [[m.eval(var).as_long() for var in yvar_list] for yvar_list in yvar_triangle]
+        hint_matrix = [[m.eval(var).as_long() for var in hvar_list] for hvar_list in hvar_matrix]
+
         # Print the solution.
         print()
         print('Solution:')
 
-        zint_matrix = [[m.eval(var).as_long() for var in zvar_list] for zvar_list in zvar_matrix]
-        yint_triangle = [[m.eval(var).as_long() for var in yvar_list] for yvar_list in yvar_triangle]
-        xint_triangle = [[m.eval(var).as_long() for var in xvar_list] + [None]*num_levels for xvar_list in xvar_triangle]
-
         print('+' + '---'*base + '-+')
         for y in range(base):
-            print(f'| {pretty_list(zint_matrix[y])} | {pretty_list(yint_triangle[y])}')
+            print(f'| {pretty_list(hint_matrix[y])} | {pretty_list(yint_triangle[y])}')
         print('+' + '---'*base + '-+')
         for level in range(num_levels):
-            print('  ' + '   '*level + pretty_list([xint_list[level] for xint_list in xint_triangle]))
+            padded_xint_triangle_col = [xint_list[level] if level < len(xint_list) else None for xint_list in xint_triangle]
+            print(f'  {pretty_list(padded_xint_triangle_col)}')
 
         return True
     else:
