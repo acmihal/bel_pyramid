@@ -53,12 +53,19 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     # This inverts the rotated_block_list.
     rotation_to_block = {rotation: block for block, rotation_list in enumerate(rotated_block_list) for rotation in rotation_list}
 
+    # Number of block faces with each digit.
+    faces_per_digit = sum(block.count(0) for block in block_list)
+
     print()
     print('Parameters:')
     print(f'    Level sizes: {size_at_level}')
     print(f'    Level blocks: {blocks_at_level}')
     print(f'    Total blocks: {num_blocks}')
     print(f'    Labels: [0, {num_labels})')
+    #print(f'    Blocks:');
+    #for block_ix, block in enumerate(block_list):
+    #    print(f'        ix={block_ix} block={block}')
+    #print(f'    Faces per digit: {faces_per_digit}')
 
     s = Solver()
 
@@ -103,6 +110,13 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
                 s.add(Implies(And(xvar==label, yvar==label), Not(Or([block_coordinate_bvar(block_ix, x, y ,h) for block_ix in blocks_without_two]))))
                 s.add(Implies(And(xvar==label, zvar==label), Not(Or([block_coordinate_bvar(block_ix, x, y ,h) for block_ix in blocks_without_two]))))
                 s.add(Implies(And(yvar==label, zvar==label), Not(Or([block_coordinate_bvar(block_ix, x, y ,h) for block_ix in blocks_without_two]))))
+
+    # Any xvar/yvar/zvar assignment consumes a number of faces_per_digit.
+    for label in range(num_labels):
+        s.add(PbEq([(zvar_matrix[y][x] == label, min(height_at_xy[x], height_at_xy[y])) for x, y in product(range(base), range(base))]
+                   + [(yvar == label, size_at_level[num_levels - 1 - h]) for yvar_list in yvar_triangle for h, yvar in enumerate(yvar_list)]
+                   + [(xvar == label, size_at_level[num_levels - 1 - h]) for xvar_list in xvar_triangle for h, xvar in enumerate(xvar_list)],
+                   faces_per_digit))
 
     # Symmetry breaking constraints:
 
