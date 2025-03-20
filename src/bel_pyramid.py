@@ -1,22 +1,22 @@
 import argparse
-from itertools import chain, combinations_with_replacement, permutations
-from z3 import And, Bool, Int, PbEq, Solver, sat
+from itertools import chain, combinations_with_replacement, permutations, product
+from z3 import And, Bool, Implies, Int, PbEq, Solver, sat
 
-# Symmetry breaking strategies
+# Symmetry breaking strategies:
 StrategyNone = 'NoSymmetryBreaking'
 SymmetryBreakingStrategies = [StrategyNone]
 
-def xvar(level, x):
-    return Int(f'l{level}_x{x}');
+def x_ivar(x, h):
+    return Int(f'x{x}_h{h}')
 
-def yvar(level, y):
-    return Int(f'l{level}_y{y}');
+def y_ivar(y, h):
+    return Int(f'y{y}_h{h}')
 
-def zvar(zx, zy):
-    return Int(f'zx{zx}_zy{zy}');
+def z_ivar(x, y):
+    return Int(f'x{x}_y{y}');
 
-def block_coordinate_bvar(block, rotation, level, x, y):
-    return Bool(f'b{block}_r{rotation}_l{level}_x{x}_y{y}')
+def block_coordinate_bvar(block, rotation, x, y, h):
+    return Bool(f'b{block}_r{rotation}_x{x}_y{y}_h{h}')
 
 def pretty_list(some_list):
     return ' '.join([f'{item:>2}' for item in some_list if item is not None])
@@ -30,8 +30,11 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     # Total number of blocks at each level.
     blocks_at_level = [size * size for size in size_at_level]
 
-    # Pyramid height at a given base level xy coordinate.
-    height_at_xy = list(range(1, 1 + size_at_level[-1] // 2)) + [num_levels] + list(range(size_at_level[-1] // 2, 0, -1))
+    # Length of the base of the pyramid.
+    base = size_at_level[-1]
+
+    # Pyramid height at a given base level x or y coordinate.
+    height_at_xy = list(range(1, 1 + base // 2)) + [num_levels] + list(range(base // 2, 0, -1))
 
     # Total number of blocks for the whole pyramid.
     num_blocks = sum(blocks_at_level)
@@ -45,16 +48,17 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     # List of all rotations for each labeled block.
     rotated_block_list = [sorted(list(set(permutations(block)))) for block in block_list]
 
-    # Map rotated blocks to block-rotations.
+    # Map x,y,z labels to a (block, rotation_ix) pair.
+    # This inverts the rotated_block_list.
     rotation_to_block_rotation = {rotation: (block, rotation_ix) for block, rotation_list in enumerate(rotated_block_list) for rotation_ix, rotation in enumerate(rotation_list)}
 
     print()
     print('Parameters:')
     print(f'    Level sizes: {size_at_level}')
-    #print(f'    Height at XY: {height_at_xy}')
     print(f'    Level blocks: {blocks_at_level}')
     print(f'    Total blocks: {num_blocks}')
     print(f'    Labels: [0, {num_labels})')
+
     #print('    Block List:')
     #for ix, block in enumerate(block_list):
     #    print(f'        {ix}: {block}')
@@ -69,37 +73,44 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
 
     s = Solver()
 
-    # Variables to solve for, organized into convenient arrays.
-    zvar_matrix = [[zvar(zx, zy) for zx in range(size_at_level[-1])] for zy in range(size_at_level[-1])]
-    yvar_triangle = [[yvar(num_levels - l - 1, zy - l) for l in range(height_at_xy[zy])] for zy in range(size_at_level[-1])]
-    xvar_triangle = [[xvar(num_levels - l - 1, zx - l) for l in range(height_at_xy[zx])] for zx in range(size_at_level[-1])]
+    # Variables to solve for, organized into convenient arrays that reflect the pyramid geometry.
+    zvar_matrix = [[z_ivar(x, y) for x in range(base)] for y in range(base)]
+    yvar_triangle = [[y_ivar(y, h) for h in range(height_at_xy[y])] for y in range(base)]
+    xvar_triangle = [[x_ivar(x, h) for h in range(height_at_xy[x])] for x in range(base)]
 
-    print('zvar_matrix')
-    for zvar_list in zvar_matrix:
-        print(f'    {zvar_list}')
+    #print('zvar_matrix')
+    #for zvar_list in zvar_matrix:
+    #    print(f'    {zvar_list}')
 
-    print('yvar_triangle')
-    for yvar_list in yvar_triangle:
-        print(f'    {yvar_list}')
+    #print('yvar_triangle')
+    #for yvar_list in yvar_triangle:
+    #    print(f'    {yvar_list}')
 
-    print('xvar_triangle')
-    for xvar_list in xvar_triangle:
-        print(f'    {xvar_list}')
+    #print('xvar_triangle')
+    #for xvar_list in xvar_triangle:
+    #    print(f'    {xvar_list}')
 
     # Each xvar/yvar/zvar must have a label in [0, num_labels).
     s.add([And(0 <= var, var < num_labels) for var in chain.from_iterable(zvar_matrix + yvar_triangle + xvar_triangle)])
 
     # Each block must have exactly one rotation and coordinate.
-    s.add([PbEq([(block_coordinate_bvar(block, rotation, level, x, y), 1)
-                 for rotation in range(len(rotated_block_list[block]))
-                 for level in range(num_levels)
-                 for y in range(size_at_level[level])
-                 for x in range(size_at_level[level])], 1)
+    s.add([PbEq([(block_coordinate_bvar(block, rotation_ix, x, y, h), 1)
+                 for rotation_ix in range(len(rotated_block_list[block]))
+                 for x in range(base)
+                 for y in range(base)
+                 for h in range(min(height_at_xy[x], height_at_xy[y]))], 1)
            for block in range(num_blocks)])
-    #for block in range(num_blocks):
-    #    print(f'PbEq1 {[block_coordinate_bvar(block, rotation, level, x, y) for rotation in range(len(rotated_block_list[block])) for level in range(num_levels) for y in range(size_at_level[level]) for x in range(size_at_level[level])]}')
 
     # Each xvar/yvar/zvar combination implies a block-rotation at a coordinate.
+    for x, y in product(range(base), range(base)):
+        zvar = zvar_matrix[y][x]
+        for h, (xvar, yvar) in enumerate(zip(xvar_triangle[x], yvar_triangle[y])):
+            #print(f'y={y} x={x} h={h} zvar={zvar} xvar={xvar} yvar={yvar}')
+            for xlabel in range(num_labels):
+                for ylabel in range(num_labels):
+                    for zlabel in range(num_labels):
+                        block, rotation_ix = rotation_to_block_rotation[(xlabel, ylabel, zlabel)]
+                        s.add(Implies(And(xvar==xlabel, yvar==ylabel, zvar==zlabel), block_coordinate_bvar(block, rotation_ix, x, y, h)))
 
     # Solve the model.
     solver_result = s.check()
@@ -116,10 +127,10 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
         yint_triangle = [[m.eval(var).as_long() for var in yvar_list] for yvar_list in yvar_triangle]
         xint_triangle = [[m.eval(var).as_long() for var in xvar_list] + [None]*num_levels for xvar_list in xvar_triangle]
 
-        print('+' + '---' * size_at_level[-1] + '-+')
-        for zy in range(size_at_level[-1]):
-            print(f'| {pretty_list(zint_matrix[zy])} | {pretty_list(yint_triangle[zy])}')
-        print('+' + '---' * size_at_level[-1] + '-+')
+        print('+' + '---'*base + '-+')
+        for y in range(base):
+            print(f'| {pretty_list(zint_matrix[y])} | {pretty_list(yint_triangle[y])}')
+        print('+' + '---'*base + '-+')
         for level in range(num_levels):
             print('  ' + '   '*level + pretty_list([xint_list[level] for xint_list in xint_triangle]))
 
