@@ -15,8 +15,8 @@ def y_ivar(y, h):
 def z_ivar(x, y):
     return Int(f'x{x}_y{y}');
 
-def block_coordinate_bvar(block, rotation, x, y, h):
-    return Bool(f'b{block}_r{rotation}_x{x}_y{y}_h{h}')
+def block_coordinate_bvar(block, x, y, h):
+    return Bool(f'b{block}_x{x}_y{y}_h{h}')
 
 def pretty_list(some_list):
     return ' '.join([f'{item:>2}' for item in some_list if item is not None])
@@ -48,9 +48,9 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     # List of all rotations for each labeled block.
     rotated_block_list = [sorted(list(set(permutations(block)))) for block in block_list]
 
-    # Map x,y,z labels to a (block, rotation_ix) pair.
+    # Map x,y,z labels to a block_list index.
     # This inverts the rotated_block_list.
-    rotation_to_block_rotation = {rotation: (block, rotation_ix) for block, rotation_list in enumerate(rotated_block_list) for rotation_ix, rotation in enumerate(rotation_list)}
+    rotation_to_block = {rotation: block for block, rotation_list in enumerate(rotated_block_list) for rotation in rotation_list}
 
     print()
     print('Parameters:')
@@ -69,22 +69,21 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     # Each xvar/yvar/zvar must have a label in [0, num_labels).
     s.add([And(0 <= var, var < num_labels) for var in chain.from_iterable(zvar_matrix + yvar_triangle + xvar_triangle)])
 
-    # Each block must have exactly one rotation and coordinate.
-    s.add([PbEq([(block_coordinate_bvar(block, rotation_ix, x, y, h), 1)
-                 for rotation_ix in range(len(rotated_block_list[block]))
+    # Each block must have exactly one coordinate.
+    s.add([PbEq([(block_coordinate_bvar(block_ix, x, y, h), 1)
                  for x in range(base)
                  for y in range(base)
                  for h in range(min(height_at_xy[x], height_at_xy[y]))], 1)
-           for block in range(num_blocks)])
+           for block_ix in range(num_blocks)])
 
-    # Each xvar/yvar/zvar combination implies a block-rotation at a coordinate.
+    # Each xvar/yvar/zvar combination implies a block at a coordinate.
     for x, y in product(range(base), range(base)):
         zvar = zvar_matrix[y][x]
         for h, (xvar, yvar) in enumerate(zip(xvar_triangle[x], yvar_triangle[y])):
             #print(f'y={y} x={x} h={h} zvar={zvar} xvar={xvar} yvar={yvar}')
             for xlabel, ylabel, zlabel in product(range(num_labels), range(num_labels), range(num_labels)):
-                block, rotation_ix = rotation_to_block_rotation[(xlabel, ylabel, zlabel)]
-                s.add(Implies(And(xvar==xlabel, yvar==ylabel, zvar==zlabel), block_coordinate_bvar(block, rotation_ix, x, y, h)))
+                block_ix = rotation_to_block[(xlabel, ylabel, zlabel)]
+                s.add(Implies(And(xvar==xlabel, yvar==ylabel, zvar==zlabel), block_coordinate_bvar(block_ix, x, y, h)))
 
     # Solve the model.
     solver_result = s.check()
