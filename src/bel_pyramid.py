@@ -3,8 +3,9 @@ from itertools import chain, combinations_with_replacement, permutations, produc
 from z3 import And, Bool, Implies, Int, Not, Or, PbEq, Solver, sat
 
 # Symmetry breaking strategies:
+StrategyBottomCenter012 = 'BottomCenter012'
 StrategyNone = 'NoSymmetryBreaking'
-SymmetryBreakingStrategies = [StrategyNone]
+SymmetryBreakingStrategies = [StrategyBottomCenter012, StrategyNone]
 
 def x_ivar(x, h):
     return Int(f'x{x}_h{h}')
@@ -91,6 +92,27 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
                 block_ix = rotation_to_block[(xlabel, ylabel, zlabel)]
                 s.add(Implies(And(xvar==xlabel, yvar==ylabel, zvar==zlabel), block_coordinate_bvar(block_ix, x, y, h)))
 
+            # One-axis shortcuts:
+            for label in range(num_labels):
+                blocks_without_label = [block_ix for block_ix in range(num_blocks) if label not in block_list[block_ix]]
+                s.add(Implies(Or(xvar==label, yvar==label, zvar==label), Not(Or([block_coordinate_bvar(block_ix, x, y ,h) for block_ix in blocks_without_label]))))
+
+            # Two-axis shortcuts:
+            for label in range(num_labels):
+                blocks_without_two = [block_ix for block_ix in range(num_blocks) if block_list[block_ix].count(label) < 2]
+                s.add(Implies(And(xvar==label, yvar==label), Not(Or([block_coordinate_bvar(block_ix, x, y ,h) for block_ix in blocks_without_two]))))
+                s.add(Implies(And(xvar==label, zvar==label), Not(Or([block_coordinate_bvar(block_ix, x, y ,h) for block_ix in blocks_without_two]))))
+                s.add(Implies(And(yvar==label, zvar==label), Not(Or([block_coordinate_bvar(block_ix, x, y ,h) for block_ix in blocks_without_two]))))
+
+    # Symmetry breaking constraints:
+
+    if symmetry_breaking_strategy == StrategyBottomCenter012:
+        # Constrain the xyz labels of the bottom center block to be 000, 001, or 012.
+        zvar = zvar_matrix[base // 2][base // 2]
+        xvar = xvar_triangle[base // 2][0]
+        yvar = yvar_triangle[base // 2][0]
+        s.add(Or(And(xvar==0, yvar==0, zvar==0), And(xvar==0, yvar==0, zvar==1), And(xvar==0, yvar==1, zvar==2)))
+
     # Solve the model.
     solver_result = s.check()
 
@@ -122,7 +144,7 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
 def main():
     parser = argparse.ArgumentParser(description="Solve Bel's Pyramid for N levels")
     parser.add_argument("N", type=int, help="number of levels in the pyramid")
-    parser.add_argument("--strategy", choices=SymmetryBreakingStrategies, default=StrategyNone, help="symmetry breaking strategy")
+    parser.add_argument("--strategy", choices=SymmetryBreakingStrategies, default=StrategyBottomCenter012, help="symmetry breaking strategy")
     args = parser.parse_args()
     solve(args.N, args.strategy)
 
