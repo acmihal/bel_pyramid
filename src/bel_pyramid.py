@@ -1,6 +1,6 @@
 import argparse
-from itertools import combinations_with_replacement, permutations
-from z3 import And, Int, Solver, sat
+from itertools import chain, combinations_with_replacement, permutations
+from z3 import And, Bool, Int, PbEq, Solver, sat
 
 # Symmetry breaking strategies
 StrategyNone = 'NoSymmetryBreaking'
@@ -15,6 +15,12 @@ def yvar(level, y):
 def zvar(zx, zy):
     return Int(f'zx{zx}_zy{zy}');
 
+def block_coordinate_bvar(block, rotation, level, x, y):
+    return Bool(f'b{block}_r{rotation}_l{level}_x{x}_y{y}')
+
+def pretty_list(some_list):
+    return ' '.join([f'{item:>2}' for item in some_list if item is not None])
+
 def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     print(f'Solving for {num_levels} levels.')
 
@@ -24,40 +30,76 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     # Total number of blocks at each level.
     blocks_at_level = [size * size for size in size_at_level]
 
+    # Pyramid height at a given base level xy coordinate.
+    height_at_xy = list(range(1, 1 + size_at_level[-1] // 2)) + [num_levels] + list(range(size_at_level[-1] // 2, 0, -1))
+
     # Total number of blocks for the whole pyramid.
     num_blocks = sum(blocks_at_level)
 
     # Number of labels on blocks.
-    num_digits = 2 * (num_levels - 1) + 1
-
-    # List of labels.
-    label_list = [f'{digit}' for digit in range(num_digits)]
+    num_labels = 2 * (num_levels - 1) + 1
 
     # List of all labeled blocks.
-    block_list = list(combinations_with_replacement(label_list, 3))
+    block_list = list(combinations_with_replacement(range(num_labels), 3))
 
-    # List of all permutations for each labeled block.
-    permuted_block_list = [sorted(list(set(permutations(block)))) for block in block_list]
+    # List of all rotations for each labeled block.
+    rotated_block_list = [sorted(list(set(permutations(block)))) for block in block_list]
+
+    # Map rotated blocks to block-rotations.
+    rotation_to_block_rotation = {rotation: (block, rotation_ix) for block, rotation_list in enumerate(rotated_block_list) for rotation_ix, rotation in enumerate(rotation_list)}
 
     print()
     print('Parameters:')
     print(f'    Level sizes: {size_at_level}')
+    #print(f'    Height at XY: {height_at_xy}')
     print(f'    Level blocks: {blocks_at_level}')
     print(f'    Total blocks: {num_blocks}')
-    print(f'    Labels: {label_list}')
-    print('    Block List:')
-    for ix, block in enumerate(block_list):
-        print(f'        {ix}: {block}')
-    print('    Permuted blocks:')
-    for ix, perm_list in enumerate(permuted_block_list):
-        print(f'        {ix}: {perm_list}')
+    print(f'    Labels: [0, {num_labels})')
+    #print('    Block List:')
+    #for ix, block in enumerate(block_list):
+    #    print(f'        {ix}: {block}')
+    #print('    Rotated blocks:')
+    #for ix, rotation_list in enumerate(rotated_block_list):
+    #    print(f'        {ix}: {rotation_list}')
+    #print('    Rotation to block-rotation map:')
+    #for rotation_list in rotated_block_list:
+    #    for rotation in rotation_list:
+    #        block, rotation_ix = rotation_to_block_rotation[rotation]
+    #        print(f'    {rotation}: block={block} rotation={rotation_ix}')
 
     s = Solver()
 
-    # Each xvar/yvar/zvar must have a label in label_list.
-    s.add([And(0 <= xvar(l, x), xvar(l, x) < num_digits) for l, x in enumerate(size_at_level)])
-    s.add([And(0 <= yvar(l, y), yvar(l, y) < num_digits) for l, y in enumerate(size_at_level)])
-    s.add([And(0 <= zvar(zx, zy), zvar(zx, zy) < num_digits) for zx in range(size_at_level[-1]) for zy in range(size_at_level[-1])])
+    # Variables to solve for, organized into convenient arrays.
+    zvar_matrix = [[zvar(zx, zy) for zx in range(size_at_level[-1])] for zy in range(size_at_level[-1])]
+    yvar_triangle = [[yvar(num_levels - l - 1, zy - l) for l in range(height_at_xy[zy])] for zy in range(size_at_level[-1])]
+    xvar_triangle = [[xvar(num_levels - l - 1, zx - l) for l in range(height_at_xy[zx])] for zx in range(size_at_level[-1])]
+
+    print('zvar_matrix')
+    for zvar_list in zvar_matrix:
+        print(f'    {zvar_list}')
+
+    print('yvar_triangle')
+    for yvar_list in yvar_triangle:
+        print(f'    {yvar_list}')
+
+    print('xvar_triangle')
+    for xvar_list in xvar_triangle:
+        print(f'    {xvar_list}')
+
+    # Each xvar/yvar/zvar must have a label in [0, num_labels).
+    s.add([And(0 <= var, var < num_labels) for var in chain.from_iterable(zvar_matrix + yvar_triangle + xvar_triangle)])
+
+    # Each block must have exactly one rotation and coordinate.
+    s.add([PbEq([(block_coordinate_bvar(block, rotation, level, x, y), 1)
+                 for rotation in range(len(rotated_block_list[block]))
+                 for level in range(num_levels)
+                 for y in range(size_at_level[level])
+                 for x in range(size_at_level[level])], 1)
+           for block in range(num_blocks)])
+    #for block in range(num_blocks):
+    #    print(f'PbEq1 {[block_coordinate_bvar(block, rotation, level, x, y) for rotation in range(len(rotated_block_list[block])) for level in range(num_levels) for y in range(size_at_level[level]) for x in range(size_at_level[level])]}')
+
+    # Each xvar/yvar/zvar combination implies a block-rotation at a coordinate.
 
     # Solve the model.
     solver_result = s.check()
@@ -69,6 +111,18 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
         # Print the solution.
         print()
         print('Solution:')
+
+        zint_matrix = [[m.eval(var).as_long() for var in zvar_list] for zvar_list in zvar_matrix]
+        yint_triangle = [[m.eval(var).as_long() for var in yvar_list] for yvar_list in yvar_triangle]
+        xint_triangle = [[m.eval(var).as_long() for var in xvar_list] + [None]*num_levels for xvar_list in xvar_triangle]
+
+        print('+' + '---' * size_at_level[-1] + '-+')
+        for zy in range(size_at_level[-1]):
+            print(f'| {pretty_list(zint_matrix[zy])} | {pretty_list(yint_triangle[zy])}')
+        print('+' + '---' * size_at_level[-1] + '-+')
+        for level in range(num_levels):
+            print('  ' + '   '*level + pretty_list([xint_list[level] for xint_list in xint_triangle]))
+
         return True
     else:
         # The pyramid is not solvable for num_levels.
