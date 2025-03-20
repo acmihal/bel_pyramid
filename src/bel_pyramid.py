@@ -59,36 +59,12 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     print(f'    Total blocks: {num_blocks}')
     print(f'    Labels: [0, {num_labels})')
 
-    #print('    Block List:')
-    #for ix, block in enumerate(block_list):
-    #    print(f'        {ix}: {block}')
-    #print('    Rotated blocks:')
-    #for ix, rotation_list in enumerate(rotated_block_list):
-    #    print(f'        {ix}: {rotation_list}')
-    #print('    Rotation to block-rotation map:')
-    #for rotation_list in rotated_block_list:
-    #    for rotation in rotation_list:
-    #        block, rotation_ix = rotation_to_block_rotation[rotation]
-    #        print(f'    {rotation}: block={block} rotation={rotation_ix}')
-
     s = Solver()
 
     # Variables to solve for, organized into convenient arrays that reflect the pyramid geometry.
     zvar_matrix = [[z_ivar(x, y) for x in range(base)] for y in range(base)]
     yvar_triangle = [[y_ivar(y, h) for h in range(height_at_xy[y])] for y in range(base)]
     xvar_triangle = [[x_ivar(x, h) for h in range(height_at_xy[x])] for x in range(base)]
-
-    #print('zvar_matrix')
-    #for zvar_list in zvar_matrix:
-    #    print(f'    {zvar_list}')
-
-    #print('yvar_triangle')
-    #for yvar_list in yvar_triangle:
-    #    print(f'    {yvar_list}')
-
-    #print('xvar_triangle')
-    #for xvar_list in xvar_triangle:
-    #    print(f'    {xvar_list}')
 
     # Each xvar/yvar/zvar must have a label in [0, num_labels).
     s.add([And(0 <= var, var < num_labels) for var in chain.from_iterable(zvar_matrix + yvar_triangle + xvar_triangle)])
@@ -106,11 +82,9 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
         zvar = zvar_matrix[y][x]
         for h, (xvar, yvar) in enumerate(zip(xvar_triangle[x], yvar_triangle[y])):
             #print(f'y={y} x={x} h={h} zvar={zvar} xvar={xvar} yvar={yvar}')
-            for xlabel in range(num_labels):
-                for ylabel in range(num_labels):
-                    for zlabel in range(num_labels):
-                        block, rotation_ix = rotation_to_block_rotation[(xlabel, ylabel, zlabel)]
-                        s.add(Implies(And(xvar==xlabel, yvar==ylabel, zvar==zlabel), block_coordinate_bvar(block, rotation_ix, x, y, h)))
+            for xlabel, ylabel, zlabel in product(range(num_labels), range(num_labels), range(num_labels)):
+                block, rotation_ix = rotation_to_block_rotation[(xlabel, ylabel, zlabel)]
+                s.add(Implies(And(xvar==xlabel, yvar==ylabel, zvar==zlabel), block_coordinate_bvar(block, rotation_ix, x, y, h)))
 
     # Solve the model.
     solver_result = s.check()
