@@ -1,6 +1,6 @@
 import argparse
 from itertools import chain, combinations_with_replacement, permutations, product
-from z3 import And, Bool, Implies, Int, PbEq, Solver, sat
+from z3 import And, Bool, Implies, Int, Not, Or, PbEq, Solver, sat
 
 # Symmetry breaking strategies:
 StrategyNone = 'NoSymmetryBreaking'
@@ -75,6 +75,12 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
                  for y in range(base)
                  for h in range(min(height_at_xy[x], height_at_xy[y]))], 1)
            for block_ix in range(num_blocks)])
+
+    # Each coordinate must have exactly one block.
+    s.add([PbEq([(block_coordinate_bvar(block_ix, x, y, h), 1) for block_ix in range(num_blocks)], 1)
+           for x in range(base)
+           for y in range(base)
+           for h in range(min(height_at_xy[x], height_at_xy[y]))])
 
     # Each xvar/yvar/zvar combination implies a block at a coordinate.
     for x, y in product(range(base), range(base)):
