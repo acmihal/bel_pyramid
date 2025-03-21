@@ -104,14 +104,6 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
         # Each block must have exactly one placement (Constraint 1).
         s.add(PbEq([(bvar, 1) for bvar in placements], 1))
 
-    # Any xvar/yvar/zvar assignment consumes a number of faces_per_digit.
-    #faces_per_digit = sum(block.count(0) for block in block_list)
-    #for label in range(num_labels):
-    #    s.add(PbEq([(zvar_matrix[y][x] == label, min(height_at_xy[x], height_at_xy[y])) for x, y in product(range(base), range(base))]
-    #               + [(yvar == label, size_at_level[num_levels - 1 - h]) for yvar_list in yvar_triangle for h, yvar in enumerate(yvar_list)]
-    #               + [(xvar == label, size_at_level[num_levels - 1 - h]) for xvar_list in xvar_triangle for h, xvar in enumerate(xvar_list)],
-    #               faces_per_digit))
-
     # Symmetry breaking constraints:
 
     if symmetry_breaking_strategy == StrategyBottomCenter012:
