@@ -1,7 +1,7 @@
 import argparse
 from itertools import chain, combinations_with_replacement, permutations, product
 import time
-from z3 import And, Bool, Implies, Int, Not, Or, PbEq, Solver, sat
+from z3 import And, Bool, Int, Or, PbEq, Solver, sat
 
 # Symmetry breaking strategies:
 StrategyBottomCenter012 = 'BottomCenter012'
@@ -17,7 +17,7 @@ def y_ivar(y, h):
 def h_ivar(x, y):
     return Int(f'x{x}_y{y}');
 
-def block_rotation_coordinate_bvar(block, rotation, x, y, h):
+def placement_bvar(block, rotation, x, y, h):
     return Bool(f'b{block}_r{rotation}_x{x}_y{y}_h{h}')
 
 def pretty_list(some_list):
@@ -26,17 +26,17 @@ def pretty_list(some_list):
 def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     print(f'Solving for {num_levels} levels.')
 
+    formulation_start_time = time.process_time()
+
+    #
+    # Calculate and print basic problem parameters.
+    #
+
     # Number of rows/cols at each level.
     size_at_level = [2 * level + 1 for level in range(num_levels)]
 
     # Total number of blocks at each level.
     blocks_at_level = [size * size for size in size_at_level]
-
-    # Length of the base of the pyramid.
-    base = size_at_level[-1]
-
-    # Pyramid height at a given base level x or y coordinate.
-    height_at_xy = list(range(1, 1 + base // 2)) + [num_levels] + list(range(base // 2, 0, -1))
 
     # Total number of blocks for the whole pyramid.
     num_blocks = sum(blocks_at_level)
@@ -44,30 +44,20 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     # Number of labels on blocks.
     num_labels = 2 * (num_levels - 1) + 1
 
+    # Length of the base of the pyramid.
+    base = size_at_level[-1]
+
+    # Pyramid height at a given base level x or y coordinate.
+    height_at_xy = list(range(1, 1 + base // 2)) + [num_levels] + list(range(base // 2, 0, -1))
+
     # List of all labeled blocks.
     block_list = list(combinations_with_replacement(range(num_labels), 3))
 
     # List of all rotations for each labeled block.
     rotated_block_list = [sorted(list(set(permutations(block)))) for block in block_list]
 
-    # Helper to get the number of unique rotations per block_ix.
-    num_rotations = [len(rotation_list) for rotation_list in rotated_block_list]
-
     # Helper for iterating over all (x,y,h) coordinates in the pyramid.
     xyh_list = [(x, y, h) for x, y in product(range(base), range(base)) for h in range(min(height_at_xy[x], height_at_xy[y]))]
-
-    # Helper for iterating over all (block_ix, rotation_ix) pairs.
-    brix_list = [(block_ix, rotation_ix) for block_ix, num_rots in enumerate(num_rotations) for rotation_ix in range(num_rots)]
-
-    # (block_ix, rotation_ix) pairs that don't have a given x, y, or h label.
-    # Once an axis has a label assigned, all block-rotations without that axis-label
-    # are ruled out at all coordinates along that axis.
-    def filter_brix(axis, label):
-        return [brix for brix in brix_list if rotated_block_list[brix[0]][brix[1]][axis] != label]
-
-    brix_without_x = [filter_brix(0, label) for label in range(num_labels)]
-    brix_without_y = [filter_brix(1, label) for label in range(num_labels)]
-    brix_without_h = [filter_brix(2, label) for label in range(num_labels)]
 
     print()
     print('Parameters:')
@@ -80,35 +70,39 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     # Construct solver and add constraints.
     #
 
-    formulation_start_time = time.process_time()
     s = Solver()
 
-    # Variables to solve for, organized into convenient arrays that reflect the pyramid geometry.
+    # Solve for the following Integer variables representing the axis label assignments.
+    # The variables are organized into convenient arrays that reflect the pyramid geometry.
     xvar_triangle = [[x_ivar(x, h) for h in range(height_at_xy[x])] for x in range(base)]
     yvar_triangle = [[y_ivar(y, h) for h in range(height_at_xy[y])] for y in range(base)]
     hvar_matrix = [[h_ivar(x, y) for x in range(base)] for y in range(base)]
 
-    # Helper to convert coordinates to axis label vars.
+    # Helper to convert (x,y,h) coordinates to axis label variables.
     def coord_to_vars(x, y, h):
         return xvar_triangle[x][h], yvar_triangle[y][h], hvar_matrix[y][x]
 
-    # Each xvar/yvar/zvar must have a label in [0, num_labels).
+    # Each axis label variable must have a label in [0, num_labels).
     s.add([And(0 <= var, var < num_labels) for var in chain.from_iterable(xvar_triangle + yvar_triangle + hvar_matrix)])
 
-    # Each block must have exactly one coordinate-rotation.
-    s.add([PbEq([(block_rotation_coordinate_bvar(block_ix, rot_ix, x, y, h), 1) for rot_ix in range(num_rots) for x,y,h in xyh_list], 1) for block_ix, num_rots in enumerate(num_rotations)])
+    # Constraints:
+    # 1. Each block must be placed at a specific (x,y,h) coordinate with a specific rotation.
+    # 2. All labels along an axis must match.
+    for block_ix, rotation_list in enumerate(rotated_block_list):
+        placements = []
 
-    # Each coordinate must have exactly one block-rotation.
-    s.add([PbEq([(block_rotation_coordinate_bvar(block_ix, rot_ix, x, y, h), 1) for block_ix, rot_ix in brix_list], 1) for x,y,h in xyh_list])
+        for rotation_ix, rotation in enumerate(rotation_list):
+            for x,y,h in xyh_list:
+                # Boolean variable indicating that a certain block with a certain rotation is placed at coordinates (x,y,h).
+                bvar = placement_bvar(block_ix, rotation_ix, x, y, h)
+                placements.append(bvar)
 
-    # Each xvar/yvar/zvar combination implies a block at a coordinate.
-    for x,y,h in xyh_list:
-        xvar, yvar, hvar = coord_to_vars(x, y, h)
+                # Each placement bvar is equivalent to three axis label assignments (Constraint 2).
+                xvar, yvar, hvar = coord_to_vars(x, y, h)
+                s.add(bvar == And(xvar==rotation[0], yvar==rotation[1], hvar==rotation[2]))
 
-        for label in range(num_labels):
-            s.add(Implies(xvar==label, Not(Or([block_rotation_coordinate_bvar(block_ix, rot_ix, x, y, h) for block_ix, rot_ix in brix_without_x[label]]))))
-            s.add(Implies(yvar==label, Not(Or([block_rotation_coordinate_bvar(block_ix, rot_ix, x, y, h) for block_ix, rot_ix in brix_without_y[label]]))))
-            s.add(Implies(hvar==label, Not(Or([block_rotation_coordinate_bvar(block_ix, rot_ix, x, y, h) for block_ix, rot_ix in brix_without_h[label]]))))
+        # Each block must have exactly one placement (Constraint 1).
+        s.add(PbEq([(bvar, 1) for bvar in placements], 1))
 
     # Any xvar/yvar/zvar assignment consumes a number of faces_per_digit.
     #faces_per_digit = sum(block.count(0) for block in block_list)
@@ -125,6 +119,7 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
         xvar, yvar, hvar = coord_to_vars(base // 2, base // 2, 0)
         s.add(Or(And(xvar==0, yvar==0, hvar==0), And(xvar==0, yvar==0, hvar==1), And(xvar==0, yvar==1, hvar==2)))
 
+    # Finished constructing the formulation.
     solver_start_time = time.process_time()
     formulation_elapsed_time = solver_start_time - formulation_start_time
     print()
