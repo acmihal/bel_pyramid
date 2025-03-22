@@ -5,8 +5,19 @@ from z3 import And, Bool, Int, Or, PbEq, Solver, sat
 
 # Symmetry breaking strategies:
 StrategyBottomCenter012 = 'BottomCenter012'
+StrategyIncreasingAxes = 'IncreasingAxes'
+StrategyConstructiveBottom = 'ConstructiveBottom'
+StrategyConstructiveBottomRecursive = 'ConstructiveBottomRecursive'
+StrategyConstructiveShell = 'ConstructiveShell'
+StrategyConstructiveShellRecursive = 'ConstructiveShellRecursive'
 StrategyNone = 'NoSymmetryBreaking'
-SymmetryBreakingStrategies = [StrategyBottomCenter012, StrategyNone]
+SymmetryBreakingStrategies = [StrategyBottomCenter012,
+                              StrategyIncreasingAxes,
+                              StrategyConstructiveBottom,
+                              StrategyConstructiveBottomRecursive,
+                              StrategyConstructiveShell,
+                              StrategyConstructiveShellRecursive,
+                              StrategyNone]
 
 def x_ivar(x, h):
     return Int(f'x{x}_h{h}')
@@ -104,12 +115,55 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
         # Each block must have exactly one placement (Constraint 1).
         s.add(PbEq([(bvar, 1) for bvar in placements], 1))
 
+    #
     # Symmetry breaking constraints:
+    #
 
     if symmetry_breaking_strategy == StrategyBottomCenter012:
         # Constrain the xyz labels of the bottom center block to be 000, 001, or 012.
         xvar, yvar, hvar = coord_to_vars(base // 2, base // 2, 0)
         s.add(Or(And(xvar==0, yvar==0, hvar==0), And(xvar==0, yvar==0, hvar==1), And(xvar==0, yvar==1, hvar==2)))
+
+    elif symmetry_breaking_strategy == StrategyIncreasingAxes:
+        # Constrain the bottom layer xvar_triangle to be increasing left-to-right.
+        bottom_xvars = [xvar_list[0] for xvar_list in xvar_triangle]
+        s.add([xvar <= ix for ix, xvar in enumerate(bottom_xvars)])
+
+    elif symmetry_breaking_strategy == StrategyConstructiveBottom:
+        # Experiment to determine if a constructive solution is possible
+        # where the top N-1 layers are a solution to the N-1 layer problem.
+        # Not recursive: no constraints on layers N-2 and higher.
+        if num_levels > 1:
+            s.add([xvar < (num_labels - 2) for xvar_list in xvar_triangle for xvar in xvar_list[1:]])
+            s.add([yvar < (num_labels - 2) for yvar_list in yvar_triangle for yvar in yvar_list[1:]])
+            s.add([hvar_matrix[y][x] < (num_labels - 2) for x,y in product(range(1, base-1), range(1, base-1))])
+
+    elif symmetry_breaking_strategy == StrategyConstructiveBottomRecursive:
+        # Recursive version of the constructive bottom strategy.
+        # UNSAT for N=4.
+        for level in range(1, num_levels):
+            s.add([xvar < (num_labels - 2*level) for xvar_list in xvar_triangle for xvar in xvar_list[level:]])
+            s.add([yvar < (num_labels - 2*level) for yvar_list in yvar_triangle for yvar in yvar_list[level:]])
+            s.add([hvar_matrix[y][x] < (num_labels - 2*level) for x,y in product(range(level, base-level), range(level, base-level))])
+
+    elif symmetry_breaking_strategy == StrategyConstructiveShell:
+        # Experiment to determine if a constructive solution is possible
+        # where the "inner pyramid" is a solution to the N-1 layer problem,
+        # and the additional layer N blocks are a "shell" on top of the inner pyramid.
+        # Not recursive: no constraints on the N-2 pyramid inside the N-1 pyramid, etc.
+        if num_levels > 1:
+            s.add([xvar < (num_labels - 2) for xvar_list in xvar_triangle for xvar in xvar_list[:-1]])
+            s.add([yvar < (num_labels - 2) for yvar_list in yvar_triangle for yvar in yvar_list[:-1]])
+            s.add([hvar_matrix[y][x] < (num_labels - 2) for x,y in product(range(1, base-1), range(1, base-1))])
+
+    elif symmetry_breaking_strategy == StrategyConstructiveShellRecursive:
+        # Recursive version of the constructive shell strategy.
+        # Additional inner pyramids are also constrained to N-2 solutions, N-3, etc.
+        # UNSAT for N=4.
+        for level in range(1, num_levels):
+            s.add([xvar < (num_labels - 2*level) for xvar_list in xvar_triangle for xvar in xvar_list[:-level]])
+            s.add([yvar < (num_labels - 2*level) for yvar_list in yvar_triangle for yvar in yvar_list[:-level]])
+            s.add([hvar_matrix[y][x] < (num_labels - 2*level) for x,y in product(range(level, base-level), range(level, base-level))])
 
     # Finished constructing the formulation.
     solver_start_time = time.process_time()
