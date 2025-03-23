@@ -73,8 +73,8 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     print()
     print('Parameters:')
     print(f'    Level sizes: {size_at_level}')
-    print(f'    Level blocks: {blocks_at_level}')
-    print(f'    Total blocks: {num_blocks}')
+    print(f'    Level cubes: {blocks_at_level}')
+    print(f'    Total cubes: {num_blocks}')
     print(f'    Labels: [0, {num_labels})')
 
     #
