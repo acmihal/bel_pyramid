@@ -175,7 +175,7 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     solver_result = s.check()
     solver_elapsed_time = time.process_time() - solver_start_time
 
-    print(f'Solver finished in {solver_elapsed_time:.2f} seconds')
+    print(f'Solver finished in {solver_elapsed_time:.2f} seconds.')
 
     if solver_result == sat:
         # The pyramid is solvable for num_levels.
