@@ -6,6 +6,7 @@ from z3 import And, Bool, Int, Or, PbEq, Solver, sat
 # Symmetry breaking strategies:
 StrategyBottomCenter012 = 'BottomCenter012'
 StrategyIncreasingAxes = 'IncreasingAxes'
+StrategyBothIncreasingAxes = 'BothIncreasingAxes'
 StrategyConstructiveBottom = 'ConstructiveBottom'
 StrategyConstructiveBottomRecursive = 'ConstructiveBottomRecursive'
 StrategyConstructiveShell = 'ConstructiveShell'
@@ -13,6 +14,7 @@ StrategyConstructiveShellRecursive = 'ConstructiveShellRecursive'
 StrategyNone = 'NoSymmetryBreaking'
 SymmetryBreakingStrategies = [StrategyBottomCenter012,
                               StrategyIncreasingAxes,
+                              StrategyBothIncreasingAxes,
                               StrategyConstructiveBottom,
                               StrategyConstructiveBottomRecursive,
                               StrategyConstructiveShell,
@@ -128,6 +130,13 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
         # Constrain the bottom layer xvar_triangle to be increasing left-to-right.
         bottom_xvars = [xvar_list[0] for xvar_list in xvar_triangle]
         s.add([xvar <= ix for ix, xvar in enumerate(bottom_xvars)])
+
+    elif symmetry_breaking_strategy == StrategyBothIncreasingAxes:
+        # Swap pyramid slices so that the bottom xyvars break mirror symmetries.
+        bottom_xvars = [xvar_list[0] for xvar_list in xvar_triangle]
+        s.add([bottom_xvars[x] <= bottom_xvars[-x-1] for x in range(base // 2)])
+        bottom_yvars = [yvar_list[0] for yvar_list in yvar_triangle]
+        s.add([bottom_yvars[y] <= bottom_yvars[-y-1] for y in range(base // 2)])
 
     elif symmetry_breaking_strategy == StrategyConstructiveBottom:
         # Experiment to determine if a constructive solution is possible
