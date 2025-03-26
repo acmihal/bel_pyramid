@@ -29,21 +29,6 @@ SymmetryBreakingStrategies = [StrategyBottomCenter012,
                               StrategyKitchenSink,
                               StrategyNone]
 
-def x_ivar(x, h):
-    return Int(f'x{x}_h{h}')
-
-def y_ivar(y, h):
-    return Int(f'y{y}_h{h}')
-
-def h_ivar(x, y):
-    return Int(f'x{x}_y{y}');
-
-def placement_bvar(block, rotation, x, y, h):
-    return Bool(f'b{block}_r{rotation}_x{x}_y{y}_h{h}')
-
-def pretty_list(some_list):
-    return ' '.join([f'{item:>2}' if isinstance(item, int) else '  ' for item in some_list])
-
 def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     print(f'Solving for {num_levels} levels.')
 
@@ -62,30 +47,36 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     # Total number of blocks for the whole pyramid.
     num_blocks = sum(blocks_at_level)
 
-    # Number of labels on blocks.
-    num_labels = 2 * (num_levels - 1) + 1
-
     # Length of the base of the pyramid.
     base = size_at_level[-1]
 
-    # Pyramid height at a given base level x or y coordinate.
-    height_at_xy = list(range(1, 1 + base // 2)) + [num_levels] + list(range(base // 2, 0, -1))
+    # Height of the front or right pyramid elevations, by x or y base coordinate respectively.
+    triangle_height = [min(x + 1, base - x) for x in range(base)]
+
+    # Height of the top pyramid elevation by (y,x) coordinate.
+    matrix_height = [[min(triangle_height[x], triangle_height[y]) for x in range(base)] for y in range(base)]
+
+    # List of all (x,y,h) coordinates in the pyramid.
+    xyh_list = [(x, y, h) for x, y in product(range(base), range(base)) for h in range(matrix_height[y][x])]
+
+    # Number of labels on blocks.
+    num_labels = 2 * (num_levels - 1) + 1
+
+    # Sort for block labels.
+    label_tuple = list(range(num_labels))
 
     # List of all labeled blocks.
-    block_list = list(combinations_with_replacement(range(num_labels), 3))
+    block_list = list(combinations_with_replacement(label_tuple, 3))
 
     # List of all rotations for each labeled block.
     rotated_block_list = [sorted(list(set(permutations(block)))) for block in block_list]
-
-    # Helper for iterating over all (x,y,h) coordinates in the pyramid.
-    xyh_list = [(x, y, h) for x, y in product(range(base), range(base)) for h in range(min(height_at_xy[x], height_at_xy[y]))]
 
     print()
     print('Parameters:')
     print(f'    Level sizes: {size_at_level}')
     print(f'    Level cubes: {blocks_at_level}')
     print(f'    Total cubes: {num_blocks}')
-    print(f'    Labels: [0, {num_labels})')
+    print(f'    Labels: {label_tuple}')
 
     #
     # Construct solver and add constraints.
@@ -105,11 +96,11 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     #s = Then('pb2bv', 'qflia').solver()
     #s = Then(With('pb2bv', solver='bv'), 'qflia').solver()
 
-    # Solve for the following Integer variables representing the axis label assignments.
-    # The variables are organized into convenient arrays that reflect the pyramid geometry.
-    xvar_triangle = [[x_ivar(x, h) for h in range(height_at_xy[x])] for x in range(base)]
-    yvar_triangle = [[y_ivar(y, h) for h in range(height_at_xy[y])] for y in range(base)]
-    hvar_matrix = [[h_ivar(x, y) for x in range(base)] for y in range(base)]
+    # Axis label assignment variables.
+    # Organized into convenient arrays that reflect the pyramid geometry.
+    xvar_triangle = [[Int(f'x{x}_h{h}') for h in range(triangle_height[x])] for x in range(base)]
+    yvar_triangle = [[Int(f'y{y}_h{h}') for h in range(triangle_height[y])] for y in range(base)]
+    hvar_matrix = [[Int(f'x{x}_y{y}') for x in range(base)] for y in range(base)]
 
     # Helper to convert (x,y,h) coordinates to axis label variables.
     def coord_to_vars(x, y, h):
@@ -122,22 +113,22 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     # 1. Each block must be placed at a specific (x,y,h) coordinate with a specific rotation.
     # 2. All labels along an axis must match.
     for block_ix, rotation_list in enumerate(rotated_block_list):
-        placements = []
+        placement_bvars = []
 
         for rotation_ix, rotation in enumerate(rotation_list):
             for x,y,h in xyh_list:
                 # Boolean variable indicating that a certain block with a certain rotation is placed at coordinates (x,y,h).
-                bvar = placement_bvar(block_ix, rotation_ix, x, y, h)
-                placements.append(bvar)
+                bvar = Bool(f'b{block_ix}_r{rotation_ix}_x{x}_y{y}_h{h}')
+                placement_bvars.append(bvar)
 
                 # Each placement bvar is equivalent to three axis label assignments (Constraint 2).
                 xvar, yvar, hvar = coord_to_vars(x, y, h)
                 s.add(bvar == And(xvar==rotation[0], yvar==rotation[1], hvar==rotation[2]))
 
         # Each block must have exactly one placement (Constraint 1).
-        #s.add(PbEq([(bvar, 1) for bvar in placements], 1))
-        s.add(And(AtMost(*placements, 1), AtLeast(*placements, 1)))
-        #s.add(Sum(placements) == 1)
+        #s.add(PbEq([(bvar, 1) for bvar in placement_bvars], 1))
+        s.add(And(AtMost(*placement_bvars, 1), AtLeast(*placement_bvars, 1)))
+        #s.add(Sum(placement_bvars) == 1)
 
     #
     # Symmetry breaking constraints:
@@ -277,10 +268,9 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
         # The pyramid is solvable for num_levels.
         m = s.model()
 
-        # Obtain the integer values of the axis labels from the model.
-        xint_triangle = [[m.eval(var).as_long() for var in xvar_list] for xvar_list in xvar_triangle]
-        yint_triangle = [[m.eval(var).as_long() for var in yvar_list] for yvar_list in yvar_triangle]
-        hint_matrix = [[m.eval(var).as_long() for var in hvar_list] for hvar_list in hvar_matrix]
+        # Pretty-print the model values for a list of vars.
+        def pretty_solution(var_list):
+            return ' '.join([f'{m.eval(var).as_long():>2}' if var is not None else '  ' for var in var_list])
 
         # Print the solution.
         print()
@@ -288,19 +278,11 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
 
         print('+' + '---'*base + '-+')
         for y in range(base):
-            print(f'| {pretty_list(hint_matrix[y])} | {pretty_list(yint_triangle[y])}')
+            print('| ' + pretty_solution(hvar_matrix[y]) + ' | ' + pretty_solution(yvar_triangle[y]))
         print('+' + '---'*base + '-+')
         for level in range(num_levels):
-            padded_xint_triangle_col = [xint_list[level] if level < len(xint_list) else None for xint_list in xint_triangle]
-            print(f'  {pretty_list(padded_xint_triangle_col)}')
-
-
-        if symmetry_breaking_strategy == StrategyIncreasingHvars:
-            print('+' + '---'*base + '-+')
-            for y in range(base):
-                maxvars = [m.eval(Int(f'max_{hvar}')).as_long() for hvar in hvar_matrix[y]]
-                print(f'| {pretty_list(maxvars)} |')
-            print('+' + '---'*base + '-+')
+            padded_xvar_triangle_column = [xvar_list[level] if level < len(xvar_list) else None for xvar_list in xvar_triangle]
+            print('  ' + pretty_solution(padded_xvar_triangle_column))
 
         # Test the solution.
         discovered_blocks = []
