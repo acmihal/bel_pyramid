@@ -71,7 +71,9 @@ def solve(num_levels):
 
     outer_solver = Solver()
     fast_inner_solver = Solver()
+    fast_inner_solver.set("smt.core.minimize", True)
     full_inner_solver = Solver()
+    full_inner_solver.set("smt.core.minimize", True)
 
     # Solve for the following Integer variables representing the axis label assignments.
     # The variables are organized into convenient arrays that reflect the pyramid geometry.
@@ -104,27 +106,45 @@ def solve(num_levels):
     for x,y in product(range(base), range(base)):
         hvar = hvar_matrix[y][x]
         length = min(height_at_xy[x], height_at_xy[y])
-        if length not in length_to_axis_var_map:
-            length_to_axis_var_map[length] = []
-        length_to_axis_var_map[length].append(hvar)
+        length_to_axis_var_map.setdefault(length, []).append(hvar)
     for yvar_list in yvar_triangle:
         for h, yvar in enumerate(yvar_list):
             length = size_at_level[num_levels - 1 - h]
-            if length not in length_to_axis_var_map:
-                length_to_axis_var_map[length] = []
-            length_to_axis_var_map[length].append(yvar)
+            length_to_axis_var_map.setdefault(length, []).append(yvar)
     for xvar_list in xvar_triangle:
         for h, xvar in enumerate(xvar_list):
             length = size_at_level[num_levels - 1 - h]
-            if length not in length_to_axis_var_map:
-                length_to_axis_var_map[length] = []
-            length_to_axis_var_map[length].append(xvar)
+            length_to_axis_var_map.setdefault(length, []).append(xvar)
     print(length_to_axis_var_map)
 
     # Each axis label variable must have a label in [0, num_labels).
     outer_solver.add([And(0 <= var, var < num_labels) for var in chain.from_iterable(xvar_triangle + yvar_triangle + hvar_matrix)])
     fast_inner_solver.add([And(0 <= var, var < num_labels) for var in chain.from_iterable(xvar_triangle + yvar_triangle + hvar_matrix)])
     full_inner_solver.add([And(0 <= var, var < num_labels) for var in chain.from_iterable(xvar_triangle + yvar_triangle + hvar_matrix)])
+
+    # Symmetry breaking: top cube should not explore x/y flips
+    outer_solver.add(xvar_triangle[base//2][-1] <= yvar_triangle[base//2][-1])
+    # Cake slice mirror:
+    bottom_xvars = [xvar_list[0] for xvar_list in xvar_triangle]
+    outer_solver.add([bottom_xvars[x] <= bottom_xvars[-x-1] for x in range(base//2)])
+    bottom_yvars = [yvar_list[0] for yvar_list in yvar_triangle]
+    outer_solver.add([bottom_yvars[y] <= bottom_yvars[-y-1] for y in range(base//2)])
+    # Anti-xymirror
+    outer_anti_xymirror_constraint = []
+    for h in range(num_levels-1):
+        #    h=0     h=0     h=1        h=0     h=1        h=2
+        #(x < y) or (x==y && x'<y') or (x==y and x'==y' and x''<=y'')
+        inner_anti_xymirror_constraint = []
+        for prior_h in range(h):
+            inner_anti_xymirror_constraint.append(xvar_triangle[base//2][prior_h]==yvar_triangle[base//2][prior_h])
+        if h < num_levels-2:
+            inner_anti_xymirror_constraint.append(xvar_triangle[base//2][h] < yvar_triangle[base//2][h])
+        else:
+            inner_anti_xymirror_constraint.append(xvar_triangle[base//2][h] <= yvar_triangle[base//2][h])
+        outer_anti_xymirror_constraint.append(And(inner_anti_xymirror_constraint))
+    outer_solver.add(Or(outer_anti_xymirror_constraint))
+    #outer_solver.add(bottom_xvars[base//2] <= bottom_yvars[base//2])
+
 
     # Constraints:
     # 1. Each block must be placed at a specific (x,y,h) coordinate with a specific rotation.
@@ -179,12 +199,6 @@ def solve(num_levels):
             header = [" ".join([f'{key}']*len(value)) for key, value in length_to_axis_var_map.items()]
             print(f'Outer Model Iteration={num_outer_model_iterations} finished in {solver_elapsed_time:.2f} seconds.')
             print('Label  ' + " ".join(header))
-            #for label in range(num_labels):
-            #    assignments = []
-            #    for key, value in length_to_axis_var_map.items():
-            #        for ivar in value:
-            #            assignments.append("X" if outer_model.eval(ivar).as_long()==label else " ")
-            #    print(f'{label:>5}  ' + " ".join(assignments))
 
             sat_table_rows = 0
             unsat_table_rows = 0
@@ -201,78 +215,27 @@ def solve(num_levels):
                             solution_forbidding_ivars.append(ivar)
                 hashable_hypothesis = ' '.join(assignments)
 
-                #print()
-                #print(f'Testing inner model:')
-                #print('Perm   ' + ' '.join(header))
-                #print(f'{perm_ix:>5}  ' + ' '.join(assignments))
-
                 if hashable_hypothesis in known_good_hypothesis_map:
                     prior_iteration, prior_perm = known_good_hypothesis_map[hashable_hypothesis]
-                    #print(f'Fast check table row {label}: cached SAT, prior iteration={prior_iteration} row={prior_perm}')
                     print(f'{label:>5}  ' + " ".join(assignments) + f'  fast check SAT (cached, prior iteration={prior_iteration} row={prior_perm})')
-                    #print(f'Hypothesis is known good at iteration={prior_iteration} permutation={prior_perm}')
-                    #assert inner_solver.check(hypothesis) == sat, "known good hypothesis was not sat"
                     sat_table_rows = sat_table_rows + 1
                     num_cached_fast_solutions = num_cached_fast_solutions + 1
                     continue
 
-                inner_result = fast_inner_solver.check(hypothesis)
-                #solver_elapsed_time = time.process_time() - solver_start_time
-                #print(f'Inner solver finished in {solver_elapsed_time:.2f} seconds.')
+                fast_inner_result = fast_inner_solver.check(hypothesis)
 
-                if inner_result == sat:
-                    # In the next outer loop, look for a different axis assignment for label zero.
+                if fast_inner_result == sat:
                     num_fast_solutions = num_fast_solutions + 1
                     sat_table_rows = sat_table_rows + 1
-                    #print(f'Inner Result = SAT, table row is potentially solvable.')
-                    #print(f'Fast check table row {label}: SAT')
                     print(f'{label:>5}  ' + " ".join(assignments) + '  fast check SAT')
-                    #outer_solver.add(Not(And([ivar==0 for ivar in solution_forbidding_ivars])))
                     known_good_hypothesis_map[hashable_hypothesis] = (num_outer_model_iterations, label)
-
-                    #inner_model = fast_inner_solver.model()
-
-                    ## Obtain the integer values of the axis labels from the model.
-                    #xint_triangle = [[inner_model.eval(var).as_long() for var in xvar_list] for xvar_list in xvar_triangle]
-                    #yint_triangle = [[inner_model.eval(var).as_long() for var in yvar_list] for yvar_list in yvar_triangle]
-                    #hint_matrix = [[inner_model.eval(var).as_long() for var in hvar_list] for hvar_list in hvar_matrix]
-
-                    ## Swap all of the 0's and perm_ix's in the above tables.
-                    ## 0 -> -1
-                    ## perm_ix -> 0
-                    ## -1 -> perm_ix
-                    #if perm_ix != 0:
-                    #    xint_triangle = [[-1 if x == 0 else x for x in xint_list] for xint_list in xint_triangle]
-                    #    yint_triangle = [[-1 if y == 0 else y for y in yint_list] for yint_list in yint_triangle]
-                    #    hint_matrix = [[-1 if xy == 0 else xy for xy in hint_list] for hint_list in hint_matrix]
-                    #    xint_triangle = [[0 if x == perm_ix else x for x in xint_list] for xint_list in xint_triangle]
-                    #    yint_triangle = [[0 if y == perm_ix else y for y in yint_list] for yint_list in yint_triangle]
-                    #    hint_matrix = [[0 if xy == perm_ix else xy for xy in hint_list] for hint_list in hint_matrix]
-                    #    xint_triangle = [[perm_ix if x == -1 else x for x in xint_list] for xint_list in xint_triangle]
-                    #    yint_triangle = [[perm_ix if y == -1 else y for y in yint_list] for yint_list in yint_triangle]
-                    #    hint_matrix = [[perm_ix if xy == -1 else xy for xy in hint_list] for hint_list in hint_matrix]
-
-                    ## Print the solution.
-                    #print(f'Fast Inner Model Solution={num_fast_solutions}:')
-
-                    #print('+' + '---'*base + '-+')
-                    #for y in range(base):
-                    #    print(f'| {pretty_list(hint_matrix[y])} | {pretty_list(yint_triangle[y])}')
-                    #print('+' + '---'*base + '-+')
-                    #for level in range(num_levels):
-                    #    padded_xint_triangle_col = [xint_list[level] if level < len(xint_list) else None for xint_list in xint_triangle]
-                    #    print(f'  {pretty_list(padded_xint_triangle_col)}')
-
                 else:
-                    # The solution_forbidding_ivars are no good for ANY label in the future.
-                    #print(f'Inner Result = UNSAT, table row is invalid for any label.')
-                    #print(f'Fast check table row {label}: UNSAT')
-                    print(f'{label:>5}  ' + " ".join(assignments) + '  fast check UNSAT')
-                    outer_solver.add([Not(And([ivar==any_label for ivar in solution_forbidding_ivars])) for any_label in range(num_labels)])
                     unsat_table_rows = unsat_table_rows + 1
                     num_fast_unsat_solutions = num_fast_unsat_solutions + 1
+                    unsat_core = fast_inner_solver.unsat_core()
+                    outer_solver.add([Not(And([constraint.arg(0)==any_label for constraint in unsat_core])) for any_label in range(num_labels)])
+                    print(f'{label:>5}  ' + " ".join(assignments) + f'  fast check UNSAT core={len(unsat_core)-len(hypothesis)}')
 
-            #print(f'Iteration has {sat_table_rows} SAT table rows and {unsat_table_rows} UNSAT table rows.')
             if unsat_table_rows == 0:
                 num_outer_model_iterations_fast_sat = num_outer_model_iterations_fast_sat + 1
 
@@ -283,8 +246,6 @@ def solve(num_levels):
                         outer_assignment = outer_model.eval(ivar).as_long()
                         hypothesis.append(ivar==outer_assignment)
 
-                #print()
-                #print(f'Testing complete outer model:')
                 print(f'Outer Model Iteration={num_outer_model_iterations} passes all fast checks, running full check.')
                 inner_result = full_inner_solver.check(hypothesis)
                 solver_elapsed_time = time.process_time() - solver_start_time
@@ -312,19 +273,29 @@ def solve(num_levels):
                         xint, yint, hint = inner_model.eval(xvar).as_long(), inner_model.eval(yvar).as_long(), inner_model.eval(hvar).as_long()
                         discovered_blocks.append(tuple(sorted([xint, yint, hint])))
                     assert sorted(discovered_blocks) == block_list, "Solution test failed: not all expected blocks found in pyramid"
-                else:
-                    print(f'Outer Model Iteration={num_outer_model_iterations} is UNSAT.')
-                    num_outer_model_iterations_full_unsat = num_outer_model_iterations_full_unsat + 1
 
-                # Outer solver should never explore any permutation of the table again.
-                solution_forbidding_clause = [[] for _ in range(len(label_perm_list))]
-                for key, value in length_to_axis_var_map.items():
-                    for ivar in value:
-                        outer_assignment = outer_model.eval(ivar).as_long()
+                    # Outer solver should never explore any permutation of the table again.
+                    solution_forbidding_clause = [[] for _ in range(len(label_perm_list))]
+                    for key, value in length_to_axis_var_map.items():
+                        for ivar in value:
+                            outer_assignment = outer_model.eval(ivar).as_long()
+                            for perm_ix, perm in enumerate(label_perm_list):
+                                inner_assignment = perm[outer_assignment]
+                                solution_forbidding_clause[perm_ix].append(ivar == inner_assignment)
+                    outer_solver.add([Not(And(clause)) for clause in solution_forbidding_clause])
+                else:
+                    num_outer_model_iterations_full_unsat = num_outer_model_iterations_full_unsat + 1
+                    unsat_core = full_inner_solver.unsat_core()
+                    #for ix, constraint in enumerate(unsat_core):
+                    #    print(f'    unsat core constraint {ix} = {[constraint.arg(0), constraint.decl(), constraint.arg(1)]}')
+                    print(f'Outer Model Iteration={num_outer_model_iterations} is UNSAT, core={len(unsat_core)-len(hypothesis)}')
+
+                    # Outer solver should never explore any permutation of the unsat core again.
+                    solution_forbidding_clause = [[] for _ in range(len(label_perm_list))]
+                    for constraint in unsat_core:
                         for perm_ix, perm in enumerate(label_perm_list):
-                            inner_assignment = perm[outer_assignment]
-                            solution_forbidding_clause[perm_ix].append(ivar == inner_assignment)
-                outer_solver.add([Not(And(clause)) for clause in solution_forbidding_clause])
+                            solution_forbidding_clause[perm_ix].append(constraint.arg(0)==perm[constraint.arg(1).as_long()])
+                    outer_solver.add([Not(And(clause)) for clause in solution_forbidding_clause])
 
         else:
             # outer model is UNSAT.
