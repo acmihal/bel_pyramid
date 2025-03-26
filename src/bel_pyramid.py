@@ -1,7 +1,7 @@
 import argparse
 from itertools import chain, combinations_with_replacement, permutations, product
 import time
-from z3 import And, Bool, Int, Or, PbEq, Solver, sat
+from z3 import And, AtLeast, AtMost, Bool, Int, Or, PbEq, Solver, sat, Tactic, Then, Implies, describe_tactics, With, Sum
 
 # Symmetry breaking strategies:
 StrategyBottomCenter012 = 'BottomCenter012'
@@ -11,6 +11,9 @@ StrategyConstructiveBottom = 'ConstructiveBottom'
 StrategyConstructiveBottomRecursive = 'ConstructiveBottomRecursive'
 StrategyConstructiveShell = 'ConstructiveShell'
 StrategyConstructiveShellRecursive = 'ConstructiveShellRecursive'
+StrategyAntiMirror = 'AntiMirror'
+StrategyIncreasingHvars = 'IncreasingHvars'
+StrategyIncreasingVars = 'IncreasingVars'
 StrategyNone = 'NoSymmetryBreaking'
 SymmetryBreakingStrategies = [StrategyBottomCenter012,
                               StrategyIncreasingAxes,
@@ -19,6 +22,9 @@ SymmetryBreakingStrategies = [StrategyBottomCenter012,
                               StrategyConstructiveBottomRecursive,
                               StrategyConstructiveShell,
                               StrategyConstructiveShellRecursive,
+                              StrategyAntiMirror,
+                              StrategyIncreasingHvars,
+                              StrategyIncreasingVars,
                               StrategyNone]
 
 def x_ivar(x, h):
@@ -83,7 +89,19 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     # Construct solver and add constraints.
     #
 
-    s = Solver()
+    #describe_tactics()
+    #s = Solver()
+    #s = Then('lia2pb', 'default').solver()
+    s = Tactic('qflia').solver()
+    #s = Then('symmetry-reduce', 'qflia').solver()
+    #s = Then('sat-preprocess', 'qflia').solver()
+    #s = Then('eq2bv', 'default').solver()
+    #s = Then('eq2bv', 'qfbv').solver()
+    #s = Then('eq2bv', 'card2bv', 'qfbv').solver()
+    #s = Then('eq2bv', 'pb2bv', 'qfbv').solver()
+    #s = Then('card2bv', 'qflia').solver()
+    #s = Then('pb2bv', 'qflia').solver()
+    #s = Then(With('pb2bv', solver='bv'), 'qflia').solver()
 
     # Solve for the following Integer variables representing the axis label assignments.
     # The variables are organized into convenient arrays that reflect the pyramid geometry.
@@ -115,7 +133,9 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
                 s.add(bvar == And(xvar==rotation[0], yvar==rotation[1], hvar==rotation[2]))
 
         # Each block must have exactly one placement (Constraint 1).
-        s.add(PbEq([(bvar, 1) for bvar in placements], 1))
+        #s.add(PbEq([(bvar, 1) for bvar in placements], 1))
+        s.add(And(AtMost(*placements, 1), AtLeast(*placements, 1)))
+        #s.add(Sum(placements) == 1)
 
     #
     # Symmetry breaking constraints:
@@ -174,6 +194,52 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
             s.add([yvar < (num_labels - 2*level) for yvar_list in yvar_triangle for yvar in yvar_list[:-level]])
             s.add([hvar_matrix[y][x] < (num_labels - 2*level) for x,y in product(range(level, base-level), range(level, base-level))])
 
+    elif symmetry_breaking_strategy == StrategyAntiMirror:
+        # Top cube must not explore x/y flips
+        s.add(xvar_triangle[base//2][-1] <= yvar_triangle[base//2][-1])
+        # Cake slices must be increasing.
+        bottom_xvars = [xvar_list[0] for xvar_list in xvar_triangle]
+        s.add([bottom_xvars[x] <= bottom_xvars[-x-1] for x in range(base // 2)])
+        bottom_yvars = [yvar_list[0] for yvar_list in yvar_triangle]
+        s.add([bottom_yvars[y] <= bottom_yvars[-y-1] for y in range(base // 2)])
+        # Center x/y column must be sorted.
+        outer_sort_constraint = []
+        for h in range(num_levels - 1):
+            inner_sort_constraint = []
+            for prior_h in range(h):
+                inner_sort_constraint.append(xvar_triangle[base//2][prior_h] == yvar_triangle[base//2][prior_h])
+            if h < num_levels - 2:
+                inner_sort_constraint.append(xvar_triangle[base//2][h] < yvar_triangle[base//2][h])
+            else:
+                inner_sort_constraint.append(xvar_triangle[base//2][h] <= yvar_triangle[base//2][h])
+            outer_sort_constraint.append(And(inner_sort_constraint))
+        if len(outer_sort_constraint) > 0:
+            s.add(Or(outer_sort_constraint))
+        # Constrain the xyz labels of the bottom center block to be 000, 001, or 012.
+        xvar, yvar, hvar = coord_to_vars(base // 2, base // 2, 0)
+        s.add(Or(And(xvar==0, yvar==0, hvar==0), And(xvar==0, yvar==0, hvar==1), And(xvar==0, yvar==1, hvar==2)))
+
+    elif symmetry_breaking_strategy == StrategyIncreasingHvars:
+        flat_hvars = [hvar_matrix[y][x] for y,x in product(range(base), range(base))]
+        s.add(flat_hvars[0] == 0)
+        s.add(Int(f'max_{flat_hvars[0]}') == 0)
+        for hvar, next_hvar in zip(flat_hvars, flat_hvars[1:]):
+            s.add(Implies(next_hvar<=Int(f'max_{hvar}'), Int(f'max_{next_hvar}') == Int(f'max_{hvar}')))
+            s.add(Implies(next_hvar>Int(f'max_{hvar}'), Int(f'max_{next_hvar}') == next_hvar))
+            s.add(next_hvar<=(Int(f'max_{hvar}') + 1))
+
+    elif symmetry_breaking_strategy == StrategyIncreasingVars:
+        #flat_vars = [xvar_triangle[base//2][0], yvar_triangle[base//2][0], hvar_matrix[base//2][base//2]]
+        flat_x = [xvar_triangle[base//2][l] for l in range(num_levels)]
+        flat_y = [yvar_triangle[base//2][l] for l in range(num_levels)]
+        flat_vars = [hvar_matrix[base//2][base//2]] + [xy for pair in zip(flat_x, flat_y) for xy in pair]
+        s.add(Int(f'max_{flat_vars[0]}') == 0)
+        s.add(flat_vars[0] == 0)
+        for v, next_v in zip(flat_vars, flat_vars[1:]):
+            s.add(Implies(next_v <= Int(f'max_{v}'), Int(f'max_{next_v}') == Int(f'max_{v}')))
+            s.add(Implies(next_v >  Int(f'max_{v}'), Int(f'max_{next_v}') == next_v))
+            s.add(next_v <= (Int(f'max_{v}') + 1))
+
     # Finished constructing the formulation.
     solver_start_time = time.process_time()
     formulation_elapsed_time = solver_start_time - formulation_start_time
@@ -206,6 +272,14 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
         for level in range(num_levels):
             padded_xint_triangle_col = [xint_list[level] if level < len(xint_list) else None for xint_list in xint_triangle]
             print(f'  {pretty_list(padded_xint_triangle_col)}')
+
+
+        if symmetry_breaking_strategy == StrategyIncreasingHvars:
+            print('+' + '---'*base + '-+')
+            for y in range(base):
+                maxvars = [m.eval(Int(f'max_{hvar}')).as_long() for hvar in hvar_matrix[y]]
+                print(f'| {pretty_list(maxvars)} |')
+            print('+' + '---'*base + '-+')
 
         # Test the solution.
         discovered_blocks = []
