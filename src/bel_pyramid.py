@@ -14,6 +14,7 @@ StrategyConstructiveShellRecursive = 'ConstructiveShellRecursive'
 StrategyAntiMirror = 'AntiMirror'
 StrategyIncreasingHvars = 'IncreasingHvars'
 StrategyIncreasingVars = 'IncreasingVars'
+StrategyKitchenSink = 'KitchenSink'
 StrategyNone = 'NoSymmetryBreaking'
 SymmetryBreakingStrategies = [StrategyBottomCenter012,
                               StrategyIncreasingAxes,
@@ -25,6 +26,7 @@ SymmetryBreakingStrategies = [StrategyBottomCenter012,
                               StrategyAntiMirror,
                               StrategyIncreasingHvars,
                               StrategyIncreasingVars,
+                              StrategyKitchenSink,
                               StrategyNone]
 
 def x_ivar(x, h):
@@ -230,6 +232,25 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
 
     elif symmetry_breaking_strategy == StrategyIncreasingVars:
         #flat_vars = [xvar_triangle[base//2][0], yvar_triangle[base//2][0], hvar_matrix[base//2][base//2]]
+        flat_x = [xvar_triangle[base//2][l] for l in range(num_levels)]
+        flat_y = [yvar_triangle[base//2][l] for l in range(num_levels)]
+        flat_vars = [hvar_matrix[base//2][base//2]] + [xy for pair in zip(flat_x, flat_y) for xy in pair]
+        s.add(Int(f'max_{flat_vars[0]}') == 0)
+        s.add(flat_vars[0] == 0)
+        for v, next_v in zip(flat_vars, flat_vars[1:]):
+            s.add(Implies(next_v <= Int(f'max_{v}'), Int(f'max_{next_v}') == Int(f'max_{v}')))
+            s.add(Implies(next_v >  Int(f'max_{v}'), Int(f'max_{next_v}') == next_v))
+            s.add(next_v <= (Int(f'max_{v}') + 1))
+
+    elif symmetry_breaking_strategy == StrategyKitchenSink:
+        # Top cube must not explore x/y flips
+        s.add(xvar_triangle[base//2][-1] <= yvar_triangle[base//2][-1])
+        # Cake slices must be increasing.
+        bottom_xvars = [xvar_list[0] for xvar_list in xvar_triangle]
+        s.add([bottom_xvars[x] <= bottom_xvars[-x-1] for x in range(base // 2)])
+        bottom_yvars = [yvar_list[0] for yvar_list in yvar_triangle]
+        s.add([bottom_yvars[y] <= bottom_yvars[-y-1] for y in range(base // 2)])
+        # Center xyz vars must be ordered.
         flat_x = [xvar_triangle[base//2][l] for l in range(num_levels)]
         flat_y = [yvar_triangle[base//2][l] for l in range(num_levels)]
         flat_vars = [hvar_matrix[base//2][base//2]] + [xy for pair in zip(flat_x, flat_y) for xy in pair]
