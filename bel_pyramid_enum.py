@@ -47,7 +47,8 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     block_list = list(combinations_with_replacement(label_tuple, 3))
 
     # List of all rotations for each labeled block.
-    rotated_block_list = [list(set(permutations(block))) for block in block_list]
+    rotated_block_list = [sorted(list(set(permutations(block))), key=lambda t: tuple(label_tuple.index(v) for v in t)) for block in block_list]
+    #rotated_block_list = [list(set(permutations(block))) for block in block_list]
 
     print()
     print('Parameters:')
@@ -55,6 +56,8 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     print(f'    Level cubes: {blocks_at_level}')
     print(f'    Total cubes: {num_blocks}')
     print(f'    Labels: {label_tuple}')
+    print(block_list)
+    print(rotated_block_list)
 
     #
     # Construct solver and add constraints.
@@ -154,6 +157,15 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
         for level in range(num_levels):
             padded_xvar_triangle_column = [xvar_list[level] if level < len(xvar_list) else None for xvar_list in xvar_triangle]
             print('  ' + pretty_solution(padded_xvar_triangle_column))
+
+        # Test the solution.
+        discovered_blocks = []
+        for x,y,h in xyh_list:
+            discovered_blocks.append(tuple(sorted([m.eval(var) for var in coord_to_vars(x, y, h)], key=lambda val: label_tuple.index(val))))
+        discovered_blocks.sort(key=lambda t: tuple(label_tuple.index(val) for val in t))
+        print(block_list)
+        print(discovered_blocks)
+        assert discovered_blocks == block_list, "Solution test failed: not all expected blocks found in pyramid"
 
         return True
     else:
