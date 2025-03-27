@@ -1,7 +1,7 @@
 import argparse
 from itertools import chain, combinations_with_replacement, permutations, product
 import time
-from z3 import And, AtLeast, AtMost, Bool, Int, Or, PbEq, Solver, sat, Tactic, Then, Implies, describe_tactics, With, Sum, Goal, set_param, set_option
+from z3 import And, AtLeast, AtMost, Bool, Const, EnumSort, IntSort, Int, Or, sat, Tactic, Implies
 
 # Symmetry breaking strategies:
 StrategyBottomCenter012 = 'BottomCenter012'
@@ -62,14 +62,23 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     # Number of labels on blocks.
     num_labels = 2 * (num_levels - 1) + 1
 
-    # Sort for block labels.
-    label_tuple = list(range(num_labels))
+    # Z3 Sort for block labels.
+    label_sort, label_tuple = IntSort(), list(range(num_labels))
+    #label_sort, label_tuple = EnumSort('label', [str(x) for x in range(num_labels)])
+
+    # Key for sorting label_sort values.
+    def sort_key(val):
+        return label_tuple.index(val)
+
+    # Key for sorting lists of block rotations.
+    def perm_key(perm):
+        return tuple(sort_key(p) for p in perm)
 
     # List of all labeled blocks.
     block_list = list(combinations_with_replacement(label_tuple, 3))
 
     # List of all rotations for each labeled block.
-    rotated_block_list = [sorted(list(set(permutations(block)))) for block in block_list]
+    rotated_block_list = [sorted(list(set(permutations(block))), key=perm_key) for block in block_list]
 
     print()
     print('Parameters:')
@@ -82,41 +91,22 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     # Construct solver and add constraints.
     #
 
-    #describe_tactics()
-    #s = Solver()
-    #s = Then('lia2pb', 'default').solver()
     #s = Tactic('qflia').solver()
-    #s = Tactic('sls-smt').solver()
-    #s = Then('symmetry-reduce', 'qflia').solver()
-    #s = Then('sat-preprocess', 'qflia').solver()
-    #s = Then('eq2bv', 'default').solver()
-    #s = Then('eq2bv', 'qfbv').solver()
-    #s = Then('eq2bv', 'card2bv', 'qfbv').solver()
-    #s = Then('eq2bv', 'pb2bv', 'qfbv').solver()
-    #s = Then('card2bv', 'qflia').solver()
-    #s = Then('pb2bv', 'qflia').solver()
-    #s = Then(With('pb2bv', solver='bv'), 'qflia').solver()
-    #s = Then('eq2bv', 'card2bv', 'bit-blast', 'default').solver()
-    #s = Then(With('simplify', arith_lhs=True, som=True), 'normalize-bounds', 'lia2pb', 'pb2bv', 'bit-blast', 'tseitin-cnf', 'sat').solver()
-    #s = Then('eq2bv', 'bit-blast', 'tseitin-cnf', 'default').solver()
-    #s = Then('eq2bv', 'bit-blast').solver()
-    #s = Then('int2bv', 'bit-blast', 'default').solver()
-    #s = Tactic('qffd').solver()
-    #s = Then('bit-blast', 'default').solver()
-    s = Goal()
+    s = Tactic('qffd').solver()
 
     # Axis label assignment variables.
     # Organized into convenient arrays that reflect the pyramid geometry.
-    xvar_triangle = [[Int(f'x{x}_h{h}') for h in range(triangle_height[x])] for x in range(base)]
-    yvar_triangle = [[Int(f'y{y}_h{h}') for h in range(triangle_height[y])] for y in range(base)]
-    hvar_matrix = [[Int(f'x{x}_y{y}') for x in range(base)] for y in range(base)]
+    xvar_triangle = [[Const(f'x{x}_h{h}', label_sort) for h in range(triangle_height[x])] for x in range(base)]
+    yvar_triangle = [[Const(f'y{y}_h{h}', label_sort) for h in range(triangle_height[y])] for y in range(base)]
+    hvar_matrix = [[Const(f'x{x}_y{y}', label_sort) for x in range(base)] for y in range(base)]
 
     # Helper to convert (x,y,h) coordinates to axis label variables.
     def coord_to_vars(x, y, h):
         return xvar_triangle[x][h], yvar_triangle[y][h], hvar_matrix[y][x]
 
     # Each axis label variable must have a label in [0, num_labels).
-    s.add([And(0 <= var, var < num_labels) for var in chain.from_iterable(xvar_triangle + yvar_triangle + hvar_matrix)])
+    if label_sort == IntSort():
+        s.add([And(0 <= var, var < num_labels) for var in chain.from_iterable(xvar_triangle + yvar_triangle + hvar_matrix)])
 
     # Constraints:
     # 1. Each block must be placed at a specific (x,y,h) coordinate with a specific rotation.
@@ -135,9 +125,7 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
                 s.add(bvar == And(xvar==rotation[0], yvar==rotation[1], hvar==rotation[2]))
 
         # Each block must have exactly one placement (Constraint 1).
-        #s.add(PbEq([(bvar, 1) for bvar in placement_bvars], 1))
         s.add(And(AtMost(*placement_bvars, 1), AtLeast(*placement_bvars, 1)))
-        #s.add(Sum(placement_bvars) == 1)
 
     #
     # Symmetry breaking constraints:
@@ -146,7 +134,9 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     if symmetry_breaking_strategy == StrategyBottomCenter012:
         # Constrain the xyz labels of the bottom center block to be 000, 001, or 012.
         xvar, yvar, hvar = coord_to_vars(base // 2, base // 2, 0)
-        s.add(Or(And(xvar==0, yvar==0, hvar==0), And(xvar==0, yvar==0, hvar==1), And(xvar==0, yvar==1, hvar==2)))
+        s.add(Or(And(xvar==label_tuple[0], yvar==label_tuple[0], hvar==label_tuple[0]),
+                 And(xvar==label_tuple[0], yvar==label_tuple[0], hvar==label_tuple[1]),
+                 And(xvar==label_tuple[0], yvar==label_tuple[1], hvar==label_tuple[2])))
 
     elif symmetry_breaking_strategy == StrategyIncreasingAxes:
         # Constrain the bottom layer xvar_triangle to be increasing left-to-right.
@@ -260,6 +250,7 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
             s.add(Implies(next_v <= Int(f'max_{v}'), Int(f'max_{next_v}') == Int(f'max_{v}')))
             s.add(Implies(next_v >  Int(f'max_{v}'), Int(f'max_{next_v}') == next_v))
             s.add(next_v <= (Int(f'max_{v}') + 1))
+        s.add([And(0 <= Int(f'max_{var}'), Int(f'max_{var}') < num_labels) for var in flat_vars])
 
     # Finished constructing the formulation.
     solver_start_time = time.process_time()
@@ -267,19 +258,8 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     print()
     print(f'Constraint formulation built in {formulation_elapsed_time:.2f} seconds.')
 
-    #t = Then('lia2pb', With('card2bv', ':pb.solver', 'totalizer')) #, 'bit-blast')
-    #t = Then('lia2pb', 'pb2bv')
-    #t = Tactic('lia2pb')
-    #set_option('sat.cardinality.encoding', 'circuit')
-    #t = Then('lia2pb', 'card2bv', 'bit-blast')
-    t = Then('lia2pb', With('pb2bv', ':pb.solver', 'totalizer', ':cardinality.encoding', 'grouped'))
-    subgoal = t(s)
-    print(subgoal[0])
-    #for c in subgoal[0]:
-    #    print(c)
     #with open('bp.smt2', 'w') as smt2_file:
     #    smt2_file.write(subgoal.to_smt2())
-    return False
 
     # Solve the model.
     solver_result = s.check()
@@ -293,7 +273,10 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
 
         # Pretty-print the model values for a list of vars.
         def pretty_solution(var_list):
-            return ' '.join([f'{m.eval(var).as_long():>2}' if var is not None else '  ' for var in var_list])
+            if label_sort == IntSort():
+                return ' '.join([f'{m.eval(var).as_long():>2}' if var is not None else '  ' for var in var_list])
+            else:
+                return ' '.join([f'{str(m.eval(var)):>2}' if var is not None else '  ' for var in var_list])
 
         # Print the solution.
         print()
@@ -308,12 +291,8 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
             print('  ' + pretty_solution(padded_xvar_triangle_column))
 
         # Test the solution.
-        discovered_blocks = []
-        for x,y,h in xyh_list:
-            xvar, yvar, hvar = coord_to_vars(x, y, h)
-            xint, yint, hint = m.eval(xvar).as_long(), m.eval(yvar).as_long(), m.eval(hvar).as_long()
-            discovered_blocks.append(tuple(sorted([xint, yint, hint])))
-        assert sorted(discovered_blocks) == block_list, "Solution test failed: not all expected blocks found in pyramid"
+        discovered_blocks = sorted([tuple(sorted([m.eval(var) for var in coord_to_vars(x, y, h)], key=sort_key)) for x, y, h in xyh_list], key=perm_key)
+        assert discovered_blocks == block_list, "Solution test failed: not all expected blocks found in pyramid"
 
         return True
     else:
