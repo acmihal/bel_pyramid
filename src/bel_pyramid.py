@@ -1,7 +1,7 @@
 import argparse
 from itertools import chain, combinations_with_replacement, permutations, product
 import time
-from z3 import And, AtLeast, AtMost, Bool, Int, Or, PbEq, Solver, sat, Tactic, Then, Implies, describe_tactics, With, Sum
+from z3 import And, AtLeast, AtMost, Bool, Int, Or, PbEq, Solver, sat, Tactic, Then, Implies, describe_tactics, With, Sum, Goal, set_param, set_option
 
 # Symmetry breaking strategies:
 StrategyBottomCenter012 = 'BottomCenter012'
@@ -85,7 +85,8 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     #describe_tactics()
     #s = Solver()
     #s = Then('lia2pb', 'default').solver()
-    s = Tactic('qflia').solver()
+    #s = Tactic('qflia').solver()
+    #s = Tactic('sls-smt').solver()
     #s = Then('symmetry-reduce', 'qflia').solver()
     #s = Then('sat-preprocess', 'qflia').solver()
     #s = Then('eq2bv', 'default').solver()
@@ -95,6 +96,14 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     #s = Then('card2bv', 'qflia').solver()
     #s = Then('pb2bv', 'qflia').solver()
     #s = Then(With('pb2bv', solver='bv'), 'qflia').solver()
+    #s = Then('eq2bv', 'card2bv', 'bit-blast', 'default').solver()
+    #s = Then(With('simplify', arith_lhs=True, som=True), 'normalize-bounds', 'lia2pb', 'pb2bv', 'bit-blast', 'tseitin-cnf', 'sat').solver()
+    #s = Then('eq2bv', 'bit-blast', 'tseitin-cnf', 'default').solver()
+    #s = Then('eq2bv', 'bit-blast').solver()
+    #s = Then('int2bv', 'bit-blast', 'default').solver()
+    #s = Tactic('qffd').solver()
+    #s = Then('bit-blast', 'default').solver()
+    s = Goal()
 
     # Axis label assignment variables.
     # Organized into convenient arrays that reflect the pyramid geometry.
@@ -257,6 +266,20 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     formulation_elapsed_time = solver_start_time - formulation_start_time
     print()
     print(f'Constraint formulation built in {formulation_elapsed_time:.2f} seconds.')
+
+    #t = Then('lia2pb', With('card2bv', ':pb.solver', 'totalizer')) #, 'bit-blast')
+    #t = Then('lia2pb', 'pb2bv')
+    #t = Tactic('lia2pb')
+    #set_option('sat.cardinality.encoding', 'circuit')
+    #t = Then('lia2pb', 'card2bv', 'bit-blast')
+    t = Then('lia2pb', With('pb2bv', ':pb.solver', 'totalizer', ':cardinality.encoding', 'grouped'))
+    subgoal = t(s)
+    print(subgoal[0])
+    #for c in subgoal[0]:
+    #    print(c)
+    #with open('bp.smt2', 'w') as smt2_file:
+    #    smt2_file.write(subgoal.to_smt2())
+    return False
 
     # Solve the model.
     solver_result = s.check()
