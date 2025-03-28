@@ -251,7 +251,8 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
         center_y = [yvar_triangle[base//2][l] for l in range(num_levels)]
         ordered_vars = [hvar_matrix[base//2][base//2]] + [xy for pair in zip(center_x, center_y) for xy in pair]
         s.add(ordered_vars[0] == label_tuple[0])
-        s.add([And(0 <= upper_bound(v), upper_bound(v) < num_labels) for v in ordered_vars])
+        if label_sort == IntSort():
+            s.add([And(0 <= upper_bound(v), upper_bound(v) < num_labels) for v in ordered_vars])
         s.add(upper_bound(ordered_vars[0]) == ordered_vars[0])
         for v, next_v in zip(ordered_vars, ordered_vars[1:]):
             s.add(Implies(next_v <= upper_bound(v), upper_bound(next_v) == upper_bound(v)))
