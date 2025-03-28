@@ -1,4 +1,5 @@
 import argparse
+from functools import partial
 from itertools import chain, combinations_with_replacement, permutations, product
 import time
 from z3 import And, AtLeast, AtMost, Bool, Const, EnumSort, IntSort, Int, Or, sat, Tactic, Implies
@@ -73,11 +74,14 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
         else:
             return label_tuple.index(val)
 
+    # Always use this key for sorting things containing labels.
+    sorted_by_label = partial(sorted, key=sort_key)
+
     # List of all labeled blocks.
     block_list = list(combinations_with_replacement(label_tuple, 3))
 
     # List of all rotations for each labeled block.
-    rotated_block_list = [sorted(list(set(permutations(block))), key=sort_key) for block in block_list]
+    rotated_block_list = [sorted_by_label(list(set(permutations(block)))) for block in block_list]
 
     print()
     print('Parameters:')
@@ -298,7 +302,7 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
             print('  ' + pretty_solution(padded_xvar_triangle_column))
 
         # Test the solution.
-        discovered_blocks = sorted([tuple(sorted([m.eval(var) for var in coord_to_vars(x, y, h)], key=sort_key)) for x, y, h in xyh_list], key=sort_key)
+        discovered_blocks = sorted_by_label([tuple(sorted_by_label([m.eval(var) for var in coord_to_vars(x, y, h)])) for x, y, h in xyh_list])
         assert discovered_blocks == block_list, "Solution test failed: not all expected blocks found in pyramid"
 
         return True
