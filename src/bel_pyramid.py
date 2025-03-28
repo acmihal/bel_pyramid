@@ -66,19 +66,18 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     label_sort, label_tuple = IntSort(), list(range(num_labels))
     #label_sort, label_tuple = EnumSort('label', [str(x) for x in range(num_labels)])
 
-    # Key for sorting label_sort values.
+    # Key for sorting label_sort values by position in label_tuple.
     def sort_key(val):
-        return label_tuple.index(val)
-
-    # Key for sorting lists of block rotations.
-    def perm_key(perm):
-        return tuple(sort_key(p) for p in perm)
+        if isinstance(val, tuple):
+            return tuple(sort_key(x) for x in val)
+        else:
+            return label_tuple.index(val)
 
     # List of all labeled blocks.
     block_list = list(combinations_with_replacement(label_tuple, 3))
 
     # List of all rotations for each labeled block.
-    rotated_block_list = [sorted(list(set(permutations(block))), key=perm_key) for block in block_list]
+    rotated_block_list = [sorted(list(set(permutations(block))), key=sort_key) for block in block_list]
 
     print()
     print('Parameters:')
@@ -298,7 +297,7 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
             print('  ' + pretty_solution(padded_xvar_triangle_column))
 
         # Test the solution.
-        discovered_blocks = sorted([tuple(sorted([m.eval(var) for var in coord_to_vars(x, y, h)], key=sort_key)) for x, y, h in xyh_list], key=perm_key)
+        discovered_blocks = sorted([tuple(sorted([m.eval(var) for var in coord_to_vars(x, y, h)], key=sort_key)) for x, y, h in xyh_list], key=sort_key)
         assert discovered_blocks == block_list, "Solution test failed: not all expected blocks found in pyramid"
 
         return True
