@@ -131,6 +131,11 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     # Symmetry breaking constraints:
     #
 
+    # Auxiliary Variable representing the closed upper bound on an axis assignment variable.
+    # Used by some symmetry breaking strategies.
+    def upper_bound(var):
+        return Const(f'max_{var}', label_sort)
+
     if symmetry_breaking_strategy == StrategyBottomCenter012:
         # Constrain the xyz labels of the bottom center block to be 000, 001, or 012.
         xvar, yvar, hvar = coord_to_vars(base // 2, base // 2, 0)
@@ -232,25 +237,27 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
             s.add(Implies(next_v >  Int(f'max_{v}'), Int(f'max_{next_v}') == next_v))
             s.add(next_v <= (Int(f'max_{v}') + 1))
 
-    elif symmetry_breaking_strategy == StrategyKitchenSink:
+    elif symmetry_breaking_strategy == StrategyKitchenSink and num_levels > 1:
         # Top cube must not explore x/y flips
         s.add(xvar_triangle[base//2][-1] <= yvar_triangle[base//2][-1])
+
         # Cake slices must be increasing.
         bottom_xvars = [xvar_list[0] for xvar_list in xvar_triangle]
         s.add([bottom_xvars[x] <= bottom_xvars[-x-1] for x in range(base // 2)])
         bottom_yvars = [yvar_list[0] for yvar_list in yvar_triangle]
         s.add([bottom_yvars[y] <= bottom_yvars[-y-1] for y in range(base // 2)])
+
         # Center xyz vars must be ordered.
-        flat_x = [xvar_triangle[base//2][l] for l in range(num_levels)]
-        flat_y = [yvar_triangle[base//2][l] for l in range(num_levels)]
-        flat_vars = [hvar_matrix[base//2][base//2]] + [xy for pair in zip(flat_x, flat_y) for xy in pair]
-        s.add(Int(f'max_{flat_vars[0]}') == 0)
-        s.add(flat_vars[0] == 0)
-        for v, next_v in zip(flat_vars, flat_vars[1:]):
-            s.add(Implies(next_v <= Int(f'max_{v}'), Int(f'max_{next_v}') == Int(f'max_{v}')))
-            s.add(Implies(next_v >  Int(f'max_{v}'), Int(f'max_{next_v}') == next_v))
-            s.add(next_v <= (Int(f'max_{v}') + 1))
-        s.add([And(0 <= Int(f'max_{var}'), Int(f'max_{var}') < num_labels) for var in flat_vars])
+        center_x = [xvar_triangle[base//2][l] for l in range(num_levels)]
+        center_y = [yvar_triangle[base//2][l] for l in range(num_levels)]
+        ordered_vars = [hvar_matrix[base//2][base//2]] + [xy for pair in zip(center_x, center_y) for xy in pair]
+        s.add(ordered_vars[0] == label_tuple[0])
+        s.add([And(0 <= upper_bound(v), upper_bound(v) < num_labels) for v in ordered_vars])
+        s.add(upper_bound(ordered_vars[0]) == ordered_vars[0])
+        for v, next_v in zip(ordered_vars, ordered_vars[1:]):
+            s.add(Implies(next_v <= upper_bound(v), upper_bound(next_v) == upper_bound(v)))
+            s.add(Implies(next_v >  upper_bound(v), upper_bound(next_v) == next_v))
+            s.add(next_v <= upper_bound(v) + 1)
 
     # Finished constructing the formulation.
     solver_start_time = time.process_time()
@@ -259,7 +266,7 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     print(f'Constraint formulation built in {formulation_elapsed_time:.2f} seconds.')
 
     #with open('bp.smt2', 'w') as smt2_file:
-    #    smt2_file.write(subgoal.to_smt2())
+    #    smt2_file.write(s.to_smt2())
 
     # Solve the model.
     solver_result = s.check()
@@ -305,5 +312,6 @@ def main():
     parser.add_argument("N", type=int, help="number of levels in the pyramid")
     parser.add_argument("--strategy", choices=SymmetryBreakingStrategies, default=StrategyBottomCenter012, help="symmetry breaking strategy")
     args = parser.parse_args()
+    assert args.N >= 1, 'Number of levels must be >= 1.'
     solve(args.N, args.strategy)
 
