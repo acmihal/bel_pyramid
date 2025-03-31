@@ -24,7 +24,7 @@ def main():
     # Validate arguments.
     assert args.N >= 1, 'Number of levels must be >= 1.'
 
-    print(f"Solving Bel's Pyramid for {args.N} levels.")
+    print(f"Solving Bel's Pyramid for {args.N} levels.", flush=True)
 
     # Initialize the formulation.
     f = Formulation(args.N, use_enum=(args.finite_domain=="enum"))
@@ -57,31 +57,31 @@ def main():
         for strategy in args.strategy:
             constraints = StrategyMap[strategy](f)
             solver.add(constraints)
-            print(f'Strategy {strategy} applied {len(constraints)} constraint(s).')
+            print(f'Strategy {strategy} applied {len(constraints)} constraint(s).', flush=True)
 
     print()
-    print(f'Constraint formulation built in {constraints_elapsed_time:.2f} seconds.')
+    print(f'Constraint formulation built in {constraints_elapsed_time:.2f} seconds.', flush=True)
  
     if args.smt2 is not None:
         print()
-        print(f'Exporting formulation to smt2 file "{args.smt2}".')
+        print(f'Exporting formulation to smt2 file "{args.smt2}".', flush=True)
         export_smt2(solver, args.smt2)
 
     if args.cnf is not None:
         print()
-        print(f'Exporting formulation to cnf file "{args.cnf}".')
+        print(f'Exporting formulation to cnf file "{args.cnf}".', flush=True)
         cnf_start_time = time.process_time()
         export_cnf(f, solver, args.cnf)
         cnf_end_time = time.process_time()
         cnf_elapsed_time = cnf_end_time - cnf_start_time
-        print(f'CNF exported in {cnf_elapsed_time:.2f} seconds.')
+        print(f'CNF exported in {cnf_elapsed_time:.2f} seconds.', flush=True)
 
     if args.certificate is not None:
         print()
-        print(f'Importing certificate from file "{args.certificate}".')
+        print(f'Importing certificate from file "{args.certificate}".', flush=True)
         certificate_assertions = import_certificate(f, args.certificate)
         solver.add(certificate_assertions)
-        print(f'Certificate applied {len(certificate_assertions)} assertion(s).')
+        print(f'Certificate applied {len(certificate_assertions)} assertion(s).', flush=True)
 
     if args.skip_solver:
         print()
@@ -89,12 +89,12 @@ def main():
         return
 
     print()
-    print(f'Starting solver with tactic "{args.tactic}".')
+    print(f'Starting solver with tactic "{args.tactic}".', flush=True)
     solver_start_time = time.process_time()
     result = solver.check()
     solver_end_time = time.process_time()
     solver_elapsed_time = solver_end_time - solver_start_time
-    print(f'Solver finished in {solver_elapsed_time:.2f} seconds.')
+    print(f'Solver finished in {solver_elapsed_time:.2f} seconds.', flush=True)
 
     if result == sat:
         # The pyramid is solvable for num_levels.

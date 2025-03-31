@@ -128,20 +128,20 @@ class Formulation:
         print(f'    Level cubes: {self.cubes_at_level}')
         print(f'    Total cubes: {self.num_cubes}')
         print(f'    Labels: {self.label_tuple}')
-        print(f'    Label Sort: {self.label_sort}')
+        print(f'    Label Sort: {self.label_sort}', flush=True)
 
     def print_variable_stats(self):
         print(f'Variables:')
         print(f'    X Axis Variables: {sum(len(sublist) for sublist in self.xvar_triangle)}')
         print(f'    Y Axis Variables: {sum(len(sublist) for sublist in self.yvar_triangle)}')
         print(f'    Z Axis Variables: {sum(len(sublist) for sublist in self.hvar_matrix)}')
-        print(f'    Placement Variables: {len(self.placement_bvar_map)}')
+        print(f'    Placement Variables: {len(self.placement_bvar_map)}', flush=True)
 
     def print_constraint_stats(self):
         print(f'Constraints:')
         print(f'    Axis Label Bounds: {len(self.axis_label_bounds)}')
         print(f'    Placement Equalities: {len(self.placement_equalities)}')
-        print(f'    Cube Uniqueness Constraints: {len(self.cube_uniqueness_constraints)}')
+        print(f'    Cube Uniqueness Constraints: {len(self.cube_uniqueness_constraints)}', flush=True)
 
     def print_model(self, model):
         # Pretty-print the model values for a list of vars.
