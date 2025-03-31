@@ -132,9 +132,9 @@ class Formulation:
 
     def print_variable_stats(self):
         print(f'Variables:')
-        print(f'    X Axis Assignments: {sum(len(sublist) for sublist in self.xvar_triangle)}')
-        print(f'    Y Axis Assignments: {sum(len(sublist) for sublist in self.yvar_triangle)}')
-        print(f'    Z Axis Assignments: {sum(len(sublist) for sublist in self.hvar_matrix)}')
+        print(f'    X Axis Variables: {sum(len(sublist) for sublist in self.xvar_triangle)}')
+        print(f'    Y Axis Variables: {sum(len(sublist) for sublist in self.yvar_triangle)}')
+        print(f'    Z Axis Variables: {sum(len(sublist) for sublist in self.hvar_matrix)}')
         print(f'    Placement Variables: {len(self.placement_bvar_map)}')
 
     def print_constraint_stats(self):
