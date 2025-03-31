@@ -134,7 +134,7 @@ def solve(num_levels, cnf_file, certificate_file):
                 line = line.rstrip()
                 if line.startswith("v "):
                     var_list = line.split()
-                    int_list = [int(var) for var in var_list[1:-1]]
+                    int_list = [int(var) for var in var_list[1:]]
                     for assignment in int_list:
                         if assignment in cnf_to_bvar_map:
                             bvar = cnf_to_bvar_map[assignment]
