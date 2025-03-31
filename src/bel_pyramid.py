@@ -1,6 +1,7 @@
 import argparse
 from functools import partial
 from itertools import chain, combinations_with_replacement, permutations, product
+import sys
 import time
 from z3 import And, AtLeast, AtMost, Bool, Const, EnumSort, IntSort, Int, Or, sat, Tactic, Implies
 
@@ -16,6 +17,8 @@ StrategyAntiMirror = 'AntiMirror'
 StrategyIncreasingHvars = 'IncreasingHvars'
 StrategyIncreasingVars = 'IncreasingVars'
 StrategyKitchenSink = 'KitchenSink'
+StrategyTripleDiagonal = 'TripleDiagonal'
+StrategyConstructiveDiagonal = 'ConstructiveDiagonal'
 StrategyNone = 'NoSymmetryBreaking'
 SymmetryBreakingStrategies = [StrategyBottomCenter012,
                               StrategyIncreasingAxes,
@@ -28,7 +31,25 @@ SymmetryBreakingStrategies = [StrategyBottomCenter012,
                               StrategyIncreasingHvars,
                               StrategyIncreasingVars,
                               StrategyKitchenSink,
+                              StrategyTripleDiagonal,
+                              StrategyConstructiveDiagonal,
                               StrategyNone]
+
+def indent_str(indent):
+    return '  ' * indent
+
+def print_formula(f, indent=0, recursive=True):
+    f_str_single_line = ''.join(str(f).splitlines())
+    print(f'{indent_str(indent)}f = {f_str_single_line}')
+    if (recursive):
+        print(f'{indent_str(indent+1)}decl = {f.decl()}')
+        print(f'{indent_str(indent+1)}num_args = {f.num_args()}')
+        print(f'{indent_str(indent+1)}params = {f.params()}')
+        arg_list = [f.arg(arg_ix) for arg_ix in range(f.num_args())]
+        print(f'{indent_str(indent+1)}args = {arg_list}')
+        for child_ix, child in enumerate(f.children()):
+            print(f'{indent_str(indent+1)} child {child_ix}')
+            print_formula(child, indent + 2)
 
 def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     print(f'Solving for {num_levels} levels.')
@@ -64,8 +85,8 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
     num_labels = 2 * (num_levels - 1) + 1
 
     # Z3 Sort for block labels.
-    label_sort, label_tuple = IntSort(), list(range(num_labels))
-    #label_sort, label_tuple = EnumSort('label', [str(x) for x in range(num_labels)])
+    #label_sort, label_tuple = IntSort(), list(range(num_labels))
+    label_sort, label_tuple = EnumSort('label', [str(x) for x in range(num_labels)])
 
     # Key for sorting label_sort values by position in label_tuple.
     def sort_key(val):
@@ -96,6 +117,7 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
 
     #s = Tactic('qflia').solver()
     s = Tactic('qffd').solver()
+    #s = Tactic('qfbv').solver()
 
     # Axis label assignment variables.
     # Organized into convenient arrays that reflect the pyramid geometry.
@@ -129,6 +151,16 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
 
         # Each block must have exactly one placement (Constraint 1).
         s.add(And(AtMost(*placement_bvars, 1), AtLeast(*placement_bvars, 1)))
+
+    # blocks with at least one zero
+    #blocks_with_zero = sum(block.count(0) > 0 for block in block_list)
+    ##print(f'block_list={block_list}')
+    ##print(f'blocks_with_zero={blocks_with_zero}')
+    #from z3 import PbLe
+    #for label in label_tuple:
+    #    s.add(PbLe([(yvar==label, size_at_level[-1-h]) for yvar_list in yvar_triangle for h, yvar in enumerate(yvar_list)], blocks_with_zero))
+    #    s.add(PbLe([(xvar==label, size_at_level[-1-h]) for xvar_list in xvar_triangle for h, xvar in enumerate(xvar_list)], blocks_with_zero))
+    #    s.add(PbLe([(hvar_matrix[y][x]==label, matrix_height[y][x]) for x, y in product(range(base), range(base))], blocks_with_zero))
 
     #
     # Symmetry breaking constraints:
@@ -263,19 +295,138 @@ def solve(num_levels, symmetry_breaking_strategy=SymmetryBreakingStrategies[0]):
             s.add(Implies(next_v >  upper_bound(v), upper_bound(next_v) == next_v))
             s.add(next_v <= upper_bound(v) + 1)
 
+    elif symmetry_breaking_strategy == StrategyTripleDiagonal:
+        # Top cube must not explore x/y flips
+        #s.add(xvar_triangle[base//2][-1] <= yvar_triangle[base//2][-1])
+
+        # Blocks with all three faces the same must appear along the diagonal on the bottom layer.
+        triple_blocks = [block_ix for block_ix, block in enumerate(block_list) if all(x == block[0] for x in block[1:])]
+        s.add([Bool(f'b{block_ix}_r0_x{x}_y{x}_h0') for x, block_ix in enumerate(triple_blocks)])
+
+    elif symmetry_breaking_strategy == StrategyConstructiveDiagonal:
+        # Blocks with all three faces the same must appear along the diagonal on the bottom layer.
+        # UNSAT for num_levels=5
+        triple_blocks = [block_ix for block_ix, block in enumerate(block_list) if all(x == block[0] for x in block[1:])]
+        s.add([Bool(f'b{block_ix}_r0_x{x}_y{x}_h0') for x, block_ix in enumerate(triple_blocks)])
+
+        for level in range(num_levels):
+            l_base = 2 * level + 1
+            l_triangle_height = [min(x + 1, l_base - x) for x in range(l_base)]
+            s.add([xvar_triangle[x][h] <= 2*level for x in range(l_base) for h in range(l_triangle_height[x])])
+            s.add([yvar_triangle[y][h] <= 2*level for y in range(l_base) for h in range(l_triangle_height[y])])
+            s.add([hvar_matrix[y][x] <= 2*level for x,y in product(range(l_base), range(l_base))])
+
     # Finished constructing the formulation.
-    solver_start_time = time.process_time()
-    formulation_elapsed_time = solver_start_time - formulation_start_time
+    smt_cnf_start_time = time.process_time()
+    formulation_elapsed_time = smt_cnf_start_time - formulation_start_time
     print()
     print(f'Constraint formulation built in {formulation_elapsed_time:.2f} seconds.')
 
-    #with open('bp.smt2', 'w') as smt2_file:
-    #    smt2_file.write(s.to_smt2())
+    with open('bp.smt2', 'w') as smt2_file:
+        smt2_file.write(s.to_smt2())
+
+    with open('bp.cnf', 'w', encoding='ascii') as cnf:
+        from z3 import Goal, Z3_OP_UNINTERPRETED, is_not, Then, With
+        #set_param("cardinality.encoding", "grouped")
+        #set_param("pb.solver", "totalizer")
+        goal = Goal()
+        goal.add(s.assertions())
+        #tactic = Then('simplify', 'propagate-values', 'card2bv', 'simplify', 'max-bv-sharing', 'bv1-blast')
+        #tactic = Then('lia2pb', 'lia2card', 'eq2bv', 'card2bv', 'pb2bv', 'bv1-blast')
+        #tactic = Then('preamble_st', 'lia2pb', With('card2bv', ':cardinality.encoding', 'circuit'), With('pb2bv', ':pb.solver', 'totalizer', ':cardinality.encoding', 'circuit'))
+        #tactic = Tactic('lia2card')
+
+        # leaves multi-level statements instead of 2-level logic
+        #tactic = Then('lia2card', 'simplify', 'propagate-values', 'simplify')
+
+        #tactic = Tactic('lia2pb')
+        #tactic = Tactic('dt2bv')
+        #tactic = Then('dt2bv', 'bit-blast', 'tseitin-cnf')
+        #tactic = Then('dt2bv', 'bit-blast', 'tseitin-cnf', With('card2bv', 'keep_cardinality_constraints', False, ':cardinality.encoding', 'unate'))
+        #tactic = Then('dt2bv', 'bit-blast', 'tseitin-cnf', 'card2bv', With('sat-preprocess', 'cardinality.solver', False))
+        #tactic = Then('dt2bv', 'bit-blast', 'tseitin-cnf', With('card2bv', 'keep_cardinality_constraints', False), With('sat-preprocess', 'cardinality.solver', False), 'simplify')
+
+        # GOOD ONE
+        #tactic = Then('dt2bv', 'bit-blast', 'tseitin-cnf', 'card2bv', With('sat-preprocess', 'cardinality.solver', False), 'simplify')
+
+        #tactic = Tactic('lia2pb')
+        #tactic = Then('lia2pb', 'pb2bv')
+        #tactic = Tactic('qffd')
+        #tactic = Tactic('dt2bv')
+        #tactic = Then('dt2bv', 'bit-blast', 'card2bv')
+        #tactic = Then('dt2bv', 'bit-blast', With('card2bv', 'keep_cardinality_constraints', False))
+        #tactic = Then('dt2bv', 'bit-blast', With('card2bv', 'cardinality.encoding', 'grouped'))
+        #tactic = Then('dt2bv', 'bit-blast', With('card2bv', 'keep_cardinality_constraints', False, 'cardinality.encoding', 'grouped'))
+        #tactic = Then('dt2bv', 'bit-blast', 'card2bv', 'tseitin-cnf')
+        #tactic = Tactic('card2bv')
+        tactic = With('card2bv', 'keep_cardinality_constraints', True)
+        applyResult = tactic(goal)
+
+        #  dictionary maps from BoolExpr to int
+        var2id = {}
+        result = applyResult[0]  #  result is a Goal
+        for f in result:
+            print_formula(f, recursive=False)
+            if (is_not(f)):
+                #  a clause with just one literal
+                var2id[f.arg(0)] = 0
+            elif f.kind() == Z3_OP_UNINTERPRETED:
+                #  single non-inverted literal
+                var2id[f] = 0
+            else:
+                for ix, e in enumerate(f.children()):
+                    if is_not(e):
+                        var2id[e.arg(0)] = 0
+                    else:
+                        var2id[e] = 0
+
+        # Assign ids to everything in var2id starting at 1 and incrementing.
+        # Also make the reverse map.
+        id = 0
+        id2var = {}
+        for key in var2id.keys():
+            var2id[key] = (id := id+1)
+            id2var[id] = key
+
+        cnf.write(f"c {' '.join(sys.argv)}\n")
+        cnf.write("c DIMACS CNF file\n")
+
+        cnf.write("c\n")
+        cnf.write("c Translation table between variable names and literal IDs\n")
+        for k, v in id2var.items():
+            name = v.decl().name()
+            if not (('!' in name) or (name.startswith("_"))):
+                #  no auxiliary switching variables
+                cnf.write(f"c {name} <-> {k}\n")
+        cnf.write("c\n")
+
+        cnf.write(f"p cnf {len(var2id)} {len(result)}\n")
+        for f in result:
+            if is_not(f):
+                cnf.write(f"-{var2id[f.arg(0)]} ")
+            elif f.kind() == Z3_OP_UNINTERPRETED:
+                #  single non-inverted literal
+                cnf.write(f"{var2id[f]} ")
+            else:
+                for e in f.children():
+                    if is_not(e):
+                        cnf.write(f"-{var2id[e.arg(0)]} ")
+                    else:
+                        cnf.write(f"{var2id[e]} ")
+
+            cnf.write("0\n")
+
+    # Finished constructing the smt2 and cnf file formats.
+    solver_start_time = time.process_time()
+    smt_cnf_elapsed_time = solver_start_time - smt_cnf_start_time
+    print()
+    print(f'SMT2/CNF output completed in {smt_cnf_elapsed_time:.2f} seconds.')
 
     # Solve the model.
     solver_result = s.check()
     solver_elapsed_time = time.process_time() - solver_start_time
 
+    print()
     print(f'Solver finished in {solver_elapsed_time:.2f} seconds.')
 
     if solver_result == sat:
