@@ -51,13 +51,9 @@ def export_cnf(formulation, solver, filename):
                 else:
                     all_vars.add(child)
 
-    # Map from CNF vars to placement bvars.
-    placement_vars_to_bvars = {}
-
-    # Set of CNF nonplacement vars.
-    nonplacement_vars = set()
-
     # Split all the CNF vars into the placement/nonplacement groups.
+    placement_vars_to_bvars = {}
+    nonplacement_vars = set()
     for var in all_vars:
         if (bvar := formulation.placement_var_by_name(str(var))) is not None:
             placement_vars_to_bvars[var] = bvar
@@ -72,36 +68,33 @@ def export_cnf(formulation, solver, filename):
     # Nonplacement vars are numbered after the placement vars.
     var_to_ix_map.update({var:ix for ix, var in enumerate(nonplacement_vars, start=1+len(placement_vars_to_bvars))})
         
-    # Remember the ids for the placement bvars.
-    ix_to_placement_var_map = {var_to_ix_map[cnf_var]:bvar for cnf_var, bvar in placement_vars_to_bvars.items()}
+    with open(filename, 'w', encoding='ascii') as cnf_file:
+        # Write cnf header
+        cnf_file.write(f"c {' '.join(sys.argv)}\n")
+        cnf_file.write(f"p cnf {len(var_to_ix_map)} {len(formulas)}\n")
 
-    # Skip outputting the CNF if we just need the ix_to_placement_var_map.
-    if filename is not None:
-        with open(filename, 'w', encoding='ascii') as cnf_file:
-            # Write cnf header
-            cnf_file.write(f"c {' '.join(sys.argv)}\n")
-            cnf_file.write(f"p cnf {len(var_to_ix_map)} {len(formulas)}\n")
+        for f in formulas:
+            if is_not(f):
+                # Formula is a single inverted literal.
+                cnf_file.write(f"-{var_to_ix_map[f.arg(0)]} ")
+            elif f.kind() == Z3_OP_UNINTERPRETED:
+                # Formula is a single positive literal.
+                cnf_file.write(f"{var_to_ix_map[f]} ")
+            else:
+                # Formula is a sum of literals.
+                for child in f.children():
+                    if is_not(child):
+                        cnf_file.write(f"-{var_to_ix_map[child.arg(0)]} ")
+                    else:
+                        cnf_file.write(f"{var_to_ix_map[child]} ")
 
-            for f in formulas:
-                if is_not(f):
-                    # Formula is a single inverted literal.
-                    cnf_file.write(f"-{var_to_ix_map[f.arg(0)]} ")
-                elif f.kind() == Z3_OP_UNINTERPRETED:
-                    # Formula is a single positive literal.
-                    cnf_file.write(f"{var_to_ix_map[f]} ")
-                else:
-                    # Formula is a sum of literals.
-                    for child in f.children():
-                        if is_not(child):
-                            cnf_file.write(f"-{var_to_ix_map[child.arg(0)]} ")
-                        else:
-                            cnf_file.write(f"{var_to_ix_map[child]} ")
+            cnf_file.write("0\n")
 
-                cnf_file.write("0\n")
+def import_certificate(formulation, filename):
+    # Sorting all of the placement bvars in the formulation by name should match the numbering used in the CNF export.
+    # One additional list element at the beginning is necessary because CNF starts numbering at 1, not 0.
+    sorted_placement_bvars = [None] + sorted(formulation.placement_bvar_map.values(), key=lambda var: str(var))
 
-    return ix_to_placement_var_map
-
-def import_certificate(ix_to_placement_var_map, filename):
     assertions = []
 
     with open(filename, 'r', encoding='ascii') as certificate:
@@ -110,10 +103,10 @@ def import_certificate(ix_to_placement_var_map, filename):
                 var_list = line.rstrip().split()
                 int_list = [int(var) for var in var_list[1:]]
                 for assignment in int_list:
-                    if assignment in ix_to_placement_var_map:
-                        assertions.append(ix_to_placement_var_map[assignment])
-                    elif -assignment in ix_to_placement_var_map:
-                        assertions.append(Not(ix_to_placement_var_map[-assignment]))
+                    if 0 < assignment and assignment < len(sorted_placement_bvars):
+                        assertions.append(sorted_placement_bvars[assignment])
+                    elif 0 < -assignment and -assignment < len(sorted_placement_bvars):
+                        assertions.append(Not(sorted_placement_bvars[-assignment]))
 
     return assertions
 

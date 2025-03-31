@@ -67,12 +67,11 @@ def main():
         print(f'Exporting formulation to smt2 file "{args.smt2}".')
         export_smt2(solver, args.smt2)
 
-    cnf_placement_var_map = None
     if args.cnf is not None:
         print()
         print(f'Exporting formulation to cnf file "{args.cnf}".')
         cnf_start_time = time.process_time()
-        cnf_placement_var_map = export_cnf(f, solver, args.cnf)
+        export_cnf(f, solver, args.cnf)
         cnf_end_time = time.process_time()
         cnf_elapsed_time = cnf_end_time - cnf_start_time
         print(f'CNF exported in {cnf_elapsed_time:.2f} seconds.')
@@ -80,9 +79,7 @@ def main():
     if args.certificate is not None:
         print()
         print(f'Importing certificate from file "{args.certificate}".')
-        if cnf_placement_var_map is None:
-            cnf_placement_var_map = export_cnf(f, solver, None)
-        certificate_assertions = import_certificate(cnf_placement_var_map, args.certificate)
+        certificate_assertions = import_certificate(f, args.certificate)
         solver.add(certificate_assertions)
         print(f'Certificate applied {len(certificate_assertions)} assertion(s).')
 
