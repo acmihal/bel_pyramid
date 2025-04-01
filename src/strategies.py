@@ -1,5 +1,5 @@
 from itertools import chain, product
-from z3 import And, If, Int, Or
+from z3 import And, If, Int, Or, PbEq
 
 # Generate a lexicographical ordering constraint between lists of integer variables.
 def precedes(a, b):
@@ -84,7 +84,7 @@ def strategy_constructive_bottom(formulation):
 
 def strategy_constructive_shell(formulation):
     # Constructive approach where the "inner pyramid" is a solution to the N-1 layer problem,
-    # and the additional layer N blocks are a "shell" on top of the inner pyramid.
+    # and the additional layer N cubes are a "shell" on top of the inner pyramid.
     # Known to be UNSAT for N=4.
     constraints = []
     for level in range(1, formulation.num_levels):
@@ -96,7 +96,7 @@ def strategy_constructive_shell(formulation):
 
 def strategy_constructive_diagonal(formulation):
     # Constructive approach where the solved N-1 pyramid is in the upper-left corner of the new N pyramid,
-    # and the additional blocks are added diagonally in the front, right, and above.
+    # and the additional cubes are added diagonally in the front, right, and above.
     # Known to be UNSAT for N=5.
     constraints = []
     for level in range(formulation.num_levels):
@@ -116,6 +116,16 @@ def strategy_label_permutation(formulation):
     flat_vars = list(chain.from_iterable(formulation.hvar_matrix + formulation.xvar_triangle + formulation.yvar_triangle))
     return [first_permutation(flat_vars, formulation.num_labels)]
 
+def strategy_face_pb_constraints(formulation):
+    faces = sum(cube.count(formulation.label_tuple[0]) for cube in formulation.cube_list)
+    constraints = []
+    for label in formulation.label_tuple:
+        constraints.append(PbEq([(formulation.hvar_matrix[y][x]==label, formulation.matrix_height[y][x]) for x, y in product(range(formulation.base), range(formulation.base))]
+                                + [(yvar==label, formulation.size_at_level[-1-h]) for yvar_list in formulation.yvar_triangle for h, yvar in enumerate(yvar_list)]
+                                + [(xvar==label, formulation.size_at_level[-1-h]) for xvar_list in formulation.xvar_triangle for h, xvar in enumerate(xvar_list)]
+                                , faces))
+    return constraints
+
 StrategyMap = {'BottomCenter012': strategy_bottom_center_012,
                'TopCubeOrdering': strategy_top_cube_ordering,
                'ConstructiveTripleDiagonal': strategy_constructive_triple_diagonal,
@@ -125,5 +135,6 @@ StrategyMap = {'BottomCenter012': strategy_bottom_center_012,
                'CakeSliceOrdering': strategy_cake_slice_ordering,
                'AntiMirror': strategy_anti_mirror,
                'IncreasingXAxis': strategy_increasing_x_axis,
-               'LabelPermutation': strategy_label_permutation}
+               'LabelPermutation': strategy_label_permutation,
+               'FacePB': strategy_face_pb_constraints}
 
