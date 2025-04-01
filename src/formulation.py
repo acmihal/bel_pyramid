@@ -124,9 +124,9 @@ class Formulation:
     def print_parameters(self):
         print(f'Parameters:')
         print(f'    Levels: {self.num_levels}')
-        print(f'    Level sizes: {self.size_at_level}')
-        print(f'    Level cubes: {self.cubes_at_level}')
-        print(f'    Total cubes: {self.num_cubes}')
+        print(f'    Level Sizes: {self.size_at_level}')
+        print(f'    Level Cubes: {self.cubes_at_level}')
+        print(f'    Total Cubes: {self.num_cubes}')
         print(f'    Labels: {self.label_tuple}')
         print(f'    Label Sort: {self.label_sort}', flush=True)
 
