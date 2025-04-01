@@ -64,12 +64,12 @@ def main():
  
     if args.smt2 is not None:
         print()
-        print(f'Exporting formulation to smt2 file "{args.smt2}".', flush=True)
+        print(f'Exporting formulation to SMT2 file "{args.smt2}".', flush=True)
         export_smt2(solver, args.smt2)
 
     if args.cnf is not None:
         print()
-        print(f'Exporting formulation to cnf file "{args.cnf}".', flush=True)
+        print(f'Exporting formulation to CNF file "{args.cnf}".', flush=True)
         cnf_start_time = time.process_time()
         export_cnf(f, solver, args.cnf)
         cnf_end_time = time.process_time()
