@@ -1,5 +1,5 @@
 from itertools import chain, product
-from z3 import And, Or
+from z3 import And, If, Int, Or
 
 # Generate a lexicographical ordering constraint between lists of integer variables.
 def precedes(a, b):
@@ -8,6 +8,26 @@ def precedes(a, b):
     if not b:
         return False
     return Or(a[0] < b[0], And(a[0] == b[0], precedes(a[1:], b[1:])))
+
+# Generates a constraint that the list of integer variables be monotonically increasing.
+def monotonic(a):
+    if len(a) < 2:
+        return True
+    else:
+        return And(a[0] <= a[1], monotonic(a[1:]))
+
+# Generates a constraint that the list of integer variables uses the lexicographically first label permutation.
+def first_permutation(a, num_labels, previous_max=-1):
+    if not a:
+        return True
+    else:
+        # Auxiliary variable representing the closed upper bound on the labels seen so far in the list.
+        next_max = Int(f'max_{str(a[0])}')
+        return And(0 <= next_max,
+                   next_max < num_labels,
+                   If(a[0] <= previous_max, next_max==previous_max, next_max==a[0]),
+                   a[0] <= previous_max + 1,
+                   first_permutation(a[1:], num_labels, next_max))
 
 def strategy_bottom_center_012(formulation):
     # Constrain the xyz labels of the bottom center cube to be 000, 001, or 012.
@@ -75,6 +95,9 @@ def strategy_constructive_shell(formulation):
     return constraints
 
 def strategy_constructive_diagonal(formulation):
+    # Constructive approach where the solved N-1 pyramid is in the upper-left corner of the new N pyramid,
+    # and the additional blocks are added diagonally in the front, right, and above.
+    # Known to be UNSAT for N=5.
     constraints = []
     for level in range(formulation.num_levels):
         max_label = 2 * level + 1
@@ -85,6 +108,14 @@ def strategy_constructive_diagonal(formulation):
         constraints.extend([formulation.hvar_matrix[y][x] < max_label for x, y in product(range(base), range(base))])
     return constraints
 
+def strategy_increasing_x_axis(formulation):
+    return [monotonic([xvar_list[0] for xvar_list in formulation.xvar_triangle])]
+
+def strategy_label_permutation(formulation):
+    # This is a strong label permutation symmetry breaking constraint.
+    flat_vars = list(chain.from_iterable(formulation.hvar_matrix + formulation.xvar_triangle + formulation.yvar_triangle))
+    return [first_permutation(flat_vars, formulation.num_labels)]
+
 StrategyMap = {'BottomCenter012': strategy_bottom_center_012,
                'TopCubeOrdering': strategy_top_cube_ordering,
                'ConstructiveTripleDiagonal': strategy_constructive_triple_diagonal,
@@ -92,5 +123,7 @@ StrategyMap = {'BottomCenter012': strategy_bottom_center_012,
                'ConstructiveShell': strategy_constructive_shell,
                'ConstructiveDiagonal': strategy_constructive_diagonal,
                'CakeSliceOrdering': strategy_cake_slice_ordering,
-               'AntiMirror': strategy_anti_mirror}
+               'AntiMirror': strategy_anti_mirror,
+               'IncreasingXAxis': strategy_increasing_x_axis,
+               'LabelPermutation': strategy_label_permutation}
 
