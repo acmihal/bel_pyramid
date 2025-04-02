@@ -1,5 +1,5 @@
 import sys
-from z3 import Goal, is_not, Not, Tactic, Then, With, Z3_OP_UNINTERPRETED
+from z3 import Goal, is_not, is_or, Not, Tactic, Then, With, Z3_OP_UNINTERPRETED
 
 def print_formula(formula, indent=0, recursive=True):
     i0 = '  ' * (indent)
@@ -33,30 +33,36 @@ def export_cnf(formulation, solver, filename):
     goal.add(solver.assertions())
 
     # Apply a set of tactics to convert a purely CNF formulation.
-    tactic = Then('lia2card', 'dt2bv', 'bit-blast', 'card2bv', 'tseitin-cnf')
+    tactic = Then('lia2card', 'dt2bv', With('card2bv', 'pb.solver', 'totalizer'), 'bit-blast', 'tseitin-cnf')
     subgoal = tactic(goal)
     formulas = subgoal[0]
 
     # Collect all variables in all formulas.
     all_vars = set()
     for f in formulas:
+        #print_formula(f)
         num_args = f.num_args()
         if num_args == 0:
             # Formula is a single positive literal.
+            assert f.kind() == Z3_OP_UNINTERPRETED, f'Tactic left unexpected formula:\n{print_formula(f)}'
             all_vars.add(f.decl().name())
         elif num_args == 1:
             # Formula is a single negative literal.
+            assert is_not(f), f'Tactic left unexpected formula:\n{print_formula(f)}'
             all_vars.add(f.arg(0).decl().name())
         else:
             # Formula is an Or of multiple literals.
+            assert is_or(f), f'Tactic left unexpected formula:\n{print_formula(f)}'
             for arg_ix in range(num_args):
                 arg = f.arg(arg_ix)
                 num_subargs = arg.num_args()
                 if num_subargs == 0:
                     # Positive literal.
+                    assert arg.kind() == Z3_OP_UNINTERPRETED, f'Tactic left unexpected formula:\n{print_formula(arg)}'
                     all_vars.add(arg.decl().name())
                 else:
                     # Negative literal
+                    assert is_not(arg), f'Tactic left unexpected formula:\n{print_formula(arg)}'
                     all_vars.add(arg.arg(0).decl().name())
 
     # Split all the CNF vars into the placement/nonplacement groups.

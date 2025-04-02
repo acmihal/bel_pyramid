@@ -1,5 +1,5 @@
 from itertools import chain, product
-from z3 import And, If, Int, Or, PbEq
+from z3 import And, If, Int, Or, PbEq, PbLe
 
 # Generate a lexicographical ordering constraint between lists of integer variables.
 def precedes(a, b):
@@ -116,7 +116,7 @@ def strategy_label_permutation(formulation):
     flat_vars = list(chain.from_iterable(formulation.hvar_matrix + formulation.xvar_triangle + formulation.yvar_triangle))
     return [first_permutation(flat_vars, formulation.num_labels)]
 
-def strategy_face_pb_constraints(formulation):
+def strategy_face_pbeq_constraints(formulation):
     faces = sum(cube.count(formulation.label_tuple[0]) for cube in formulation.cube_list)
     constraints = []
     for label in formulation.label_tuple:
@@ -124,6 +124,15 @@ def strategy_face_pb_constraints(formulation):
                                 + [(yvar==label, formulation.size_at_level[-1-h]) for yvar_list in formulation.yvar_triangle for h, yvar in enumerate(yvar_list)]
                                 + [(xvar==label, formulation.size_at_level[-1-h]) for xvar_list in formulation.xvar_triangle for h, xvar in enumerate(xvar_list)]
                                 , faces))
+    return constraints
+
+def strategy_face_pble_constraints(formulation):
+    faces = sum(cube.count(formulation.label_tuple[0]) > 0 for cube in formulation.cube_list)
+    constraints = []
+    for label in formulation.label_tuple:
+        constraints.append(PbLe([(yvar==label, formulation.size_at_level[-1-h]) for yvar_list in formulation.yvar_triangle for h, yvar in enumerate(yvar_list)], faces))
+        constraints.append(PbLe([(xvar==label, formulation.size_at_level[-1-h]) for xvar_list in formulation.xvar_triangle for h, xvar in enumerate(xvar_list)], faces))
+        constraints.append(PbLe([(formulation.hvar_matrix[y][x]==label, formulation.matrix_height[y][x]) for x, y in product(range(formulation.base), range(formulation.base))], faces))
     return constraints
 
 StrategyMap = {'BottomCenter012': strategy_bottom_center_012,
@@ -136,5 +145,6 @@ StrategyMap = {'BottomCenter012': strategy_bottom_center_012,
                'AntiMirror': strategy_anti_mirror,
                'IncreasingXAxis': strategy_increasing_x_axis,
                'LabelPermutation': strategy_label_permutation,
-               'FacePB': strategy_face_pb_constraints}
+               'FacePBEQ': strategy_face_pbeq_constraints,
+               'FacePBLE': strategy_face_pble_constraints}
 
