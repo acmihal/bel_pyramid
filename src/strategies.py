@@ -116,6 +116,13 @@ def strategy_label_permutation(formulation):
     flat_vars = list(chain.from_iterable(formulation.hvar_matrix + formulation.xvar_triangle + formulation.yvar_triangle))
     return [first_permutation(flat_vars, formulation.num_labels)]
 
+def strategy_label_permutation_importance(formulation):
+    # Weak label permutation symmetry breaking constraint.
+    # Focuses on axis vars that control the most cubes.
+    important_vars = ([formulation.hvar_matrix[formulation.base//2][formulation.base//2]]
+                      + [xy for pair in zip(formulation.xvar_triangle[formulation.base//2], formulation.yvar_triangle[formulation.base//2]) for xy in pair])
+    return [first_permutation(important_vars, formulation.num_labels)]
+
 def strategy_face_pbeq_constraints(formulation):
     faces = sum(cube.count(formulation.label_tuple[0]) for cube in formulation.cube_list)
     constraints = []
@@ -145,6 +152,7 @@ StrategyMap = {'BottomCenter012': strategy_bottom_center_012,
                'AntiMirror': strategy_anti_mirror,
                'IncreasingXAxis': strategy_increasing_x_axis,
                'LabelPermutation': strategy_label_permutation,
+               'LabelPermutationImportance': strategy_label_permutation_importance,
                'FacePBEQ': strategy_face_pbeq_constraints,
                'FacePBLE': strategy_face_pble_constraints}
 
