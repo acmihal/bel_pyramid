@@ -1,3 +1,8 @@
 .*.swp
 __pycache__/
 *.egg-info/
+*.cnf
+*.cnf.gz
+*.cert
+*.smt2
+*.txt
