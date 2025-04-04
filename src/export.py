@@ -1,5 +1,5 @@
 import sys
-from z3 import Goal, is_not, is_or, Not, Tactic, Then, With, Z3_OP_UNINTERPRETED
+from z3 import Goal, is_false, is_not, is_or, Not, Tactic, Then, With, Z3_OP_UNINTERPRETED
 
 def print_formula(formula, indent=0, recursive=True):
     i0 = '  ' * (indent)
@@ -39,30 +39,35 @@ def export_cnf(formulation, solver, filename):
 
     # Collect all variables in all formulas.
     all_vars = set()
+    num_false_formulas = 0
     for f in formulas:
         #print_formula(f)
         num_args = f.num_args()
         if num_args == 0:
-            # Formula is a single positive literal.
-            assert f.kind() == Z3_OP_UNINTERPRETED, f'Tactic left unexpected formula:\n{print_formula(f)}'
+            if is_false(f):
+                print(f'Tactics reduced formula to False. Problem is UNSAT.')
+                num_false_formulas = num_false_formulas + 1
+            else:
+                # Formula is a single positive literal.
+                assert f.kind() == Z3_OP_UNINTERPRETED, f'Tactics left unexpected formula:\n{print_formula(f)}'
             all_vars.add(f.decl().name())
         elif num_args == 1:
             # Formula is a single negative literal.
-            assert is_not(f), f'Tactic left unexpected formula:\n{print_formula(f)}'
+            assert is_not(f), f'Tactics left unexpected formula:\n{print_formula(f)}'
             all_vars.add(f.arg(0).decl().name())
         else:
             # Formula is an Or of multiple literals.
-            assert is_or(f), f'Tactic left unexpected formula:\n{print_formula(f)}'
+            assert is_or(f), f'Tactics left unexpected formula:\n{print_formula(f)}'
             for arg_ix in range(num_args):
                 arg = f.arg(arg_ix)
                 num_subargs = arg.num_args()
                 if num_subargs == 0:
                     # Positive literal.
-                    assert arg.kind() == Z3_OP_UNINTERPRETED, f'Tactic left unexpected formula:\n{print_formula(arg)}'
+                    assert arg.kind() == Z3_OP_UNINTERPRETED, f'Tactics left unexpected formula:\n{print_formula(arg)}'
                     all_vars.add(arg.decl().name())
                 else:
                     # Negative literal
-                    assert is_not(arg), f'Tactic left unexpected formula:\n{print_formula(arg)}'
+                    assert is_not(arg), f'Tactics left unexpected formula:\n{print_formula(arg)}'
                     all_vars.add(arg.arg(0).decl().name())
 
     # Split all the CNF vars into the placement/nonplacement groups.
@@ -82,14 +87,19 @@ def export_cnf(formulation, solver, filename):
     with open(filename, 'w', encoding='ascii') as cnf_file:
         # Write cnf header
         cnf_file.write(f"c {' '.join(sys.argv)}\n")
-        cnf_file.write(f"p cnf {len(var_to_ix_map)} {len(formulas)}\n")
+        cnf_file.write(f"p cnf {len(var_to_ix_map)} {len(formulas) + num_false_formulas}\n")
 
         for f in formulas:
             literals = []
             num_args = f.num_args()
             if num_args == 0:
-                # Formula is a single positive literal.
-                literals.append(var_to_ix_map[f.decl().name()])
+                if is_false(f):
+                    cnf_file.write(f'{var_to_ix_map[f.decl().name()]} 0\n')
+                    cnf_file.write(f'{-var_to_ix_map[f.decl().name()]} 0\n')
+                    continue
+                else:
+                    # Formula is a single positive literal.
+                    literals.append(var_to_ix_map[f.decl().name()])
             elif num_args == 1:
                 # Formula is a single negative literal.
                 literals.append(-var_to_ix_map[f.arg(0).decl().name()])
@@ -115,7 +125,10 @@ def import_certificate(formulation, filename):
 
     with open(filename, 'r', encoding='ascii') as certificate:
         for line in certificate:
-            if line.startswith("v "):
+            if line.startswith("s UNSATISFIABLE"):
+                assertions.append(False)
+                print('Certificate indicates problem is UNSAT.')
+            elif line.startswith("v "):
                 var_list = line.rstrip().split()
                 for assignment in map(int, var_list[1:]):
                     if 0 < assignment and assignment < len(sorted_placement_bvars):
