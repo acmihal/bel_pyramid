@@ -16,7 +16,7 @@ def test_provided_args(capsys):
     with patch.object(sys, 'argv', testargs):
         main()
     captured = capsys.readouterr()
-    assert captured.out.startswith("Solving for 1 levels.")
+    assert captured.out.startswith("Solving Bel's Pyramid for 1 levels.")
 
 def test_help(capsys):
     testargs = ["bel_pyramid", "-h"]
