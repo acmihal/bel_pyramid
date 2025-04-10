@@ -47,7 +47,7 @@ There are no duplicate cubes. Each cube is unique and must be used exactly once 
 
 ## Axis Labels
 
-Due to the rule that opposite cube faces have identical labels, any line of cubes along an axis must have the same label all the down the axis. Therefore we do not need to see the hidden faces to determine the state of the pyramid. It is only necessary to see the labels on the top, front, and right external faces of the pyramid.
+Due to the rule that opposite cube faces have identical labels, any line of cubes along an axis must have the same label all the way down the axis. Therefore we do not need to see the hidden faces to determine the state of the pyramid. It is only necessary to see the labels on the top, front, and right external faces of the pyramid.
 
 ![Axis labels are equivalent to cube placements and rotations](doc/axis_placement_rotation.png)
 
@@ -97,7 +97,7 @@ This recursive approach works only for N up to 3 and is UNSAT for N=4. Here is a
 
 ### Adding a New Shell on Top
 
-This approach takes a solved N-1 pyramid and drops an additional layer of cubes on top of it to create a N-layer pyramid. All of the cubes with the two new labels are on top of the pyramid, wrapping around the previous pyramid. This continues until you reach the trivial (0,0,0) pyramid in the very center of the bottom layer.
+This approach takes a solved N-1 pyramid and drops an additional layer of cubes on top of it to create a N-layer pyramid. All of the cubes with the two new labels are on top of the pyramid, wrapping around the previous pyramid. This pattern continues until you reach the trivial (0,0,0) pyramid in the very center of the bottom layer.
 
 This approach works for N up to 3 and is UNSAT for N=4. Here is a solution for N=3:
 
@@ -160,7 +160,28 @@ A number of constructive strategies are also implemented:
 
 The fastest known configuration is to use the ConstructiveTripleDiagonal strategy by itself.
 
-![Cake Slice Symmetry](doc/cake_slices.png)
+![Cake Slice Symmetry: the positions of the blue and green slices can be swapped without changing any of the purple cubes.](doc/cake_slices.png)
+
+## Proposed Benchmarks
+
+A set of hand-selected benchmarks for measuring the performance of SAT solvers can be generated using the **generate_benchmarks.sh** command.
+
+| Benchmark | Satisfiable? | Kissat Runtime (seconds) |
+| --- | --- | --- |
+| bp4 | SAT | 10.26 |
+| bp4_am | SAT | 2.73 |
+| bp4_cbottom | UNSAT | 60.73 |
+| bp4_cdiag | SAT | 4.58 |
+| bp4_cshell | UNSAT | 18.09 |
+| bp4_enum | SAT | 12.19 |
+| bp4_lp | SAT | 26.46 |
+| bp4_zring_ctd | SAT | 100.02 |
+| bp5_ctd | SAT | 233.16 |
+| bp5_ctd_enum | SAT | 183.81 |
+| bp5_lp_ctd | SAT | 657.63 |
+| bp5_ystep_ctd | SAT | 306.68 |
+| bp5_ystep_ctd_enum | SAT | 33.52 |
+| bp5_ystem_zring | SAT | 129.88 |
 
 ## Example Solutions
 
