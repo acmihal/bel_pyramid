@@ -1,7 +1,7 @@
 from itertools import chain, product
 from z3 import And, If, Int, Or, PbEq, PbLe
 
-# Generate a lexicographical ordering constraint between lists of integer variables.
+# Generate a lexicographical ordering constraint between two lists of integer variables.
 def precedes(a, b):
     if not a:
         return True
@@ -124,6 +124,8 @@ def strategy_label_permutation_importance(formulation):
     return [first_permutation(important_vars, formulation.num_labels)]
 
 def strategy_face_pbeq_constraints(formulation):
+    # A lookahead constraint to try to avoid subspaces where too many axes have been assigned to the same label,
+    # such that there are not enough cubes with that label to fill all the axes.
     faces = sum(cube.count(formulation.label_tuple[0]) for cube in formulation.cube_list)
     constraints = []
     for label in formulation.label_tuple:
@@ -134,6 +136,7 @@ def strategy_face_pbeq_constraints(formulation):
     return constraints
 
 def strategy_face_pble_constraints(formulation):
+    # A variation of the FacePBEQ lookahead constraint that considers the X-, Y-, and Z-axes in isolation instead of together.
     faces = sum(cube.count(formulation.label_tuple[0]) > 0 for cube in formulation.cube_list)
     constraints = []
     for label in formulation.label_tuple:
@@ -143,15 +146,21 @@ def strategy_face_pble_constraints(formulation):
     return constraints
 
 def strategy_z_ring(formulation):
+    # A constraint on the outermost ring of Z-axis variables, where the pyramid height is 1.
+    # This strategy does not have a explicit justification.
     return [And([formulation.hvar_matrix[y][0] == formulation.label_tuple[y] for y in range(formulation.base)]),
             And([formulation.hvar_matrix[-1][x] == formulation.label_tuple[-1] for x in range(formulation.base)]),
             And([formulation.hvar_matrix[y][-1] == formulation.label_tuple[y] for y in range(formulation.base)]),
             And([formulation.hvar_matrix[0][x] == formulation.label_tuple[0] for x in range(formulation.base)])]
 
 def strategy_y_step(formulation):
+    # Forces all of the Y-axis labels to a particular sequential pattern.
+    # SAT up to at least N=5.
     return [And(yvar==formulation.label_tuple[y+h]) for y, yvar_list in enumerate(formulation.yvar_triangle) for h, yvar in enumerate(yvar_list)]
 
 def strategy_x_step(formulation):
+    # A variation on the YStep pattern applied to the X-axis labels.
+    # XStep + YStep in combination is UNSAT for N=3.
     return [And(xvar==formulation.label_tuple[x-h]) for x, xvar_list in enumerate(formulation.xvar_triangle) for h, xvar in enumerate(xvar_list)]
 
 StrategyMap = {'BottomCenter012': strategy_bottom_center_012,

@@ -157,8 +157,17 @@ A number of constructive strategies are also implemented:
 | ConstructiveShell | A recursive constructive approach that adds layer N on top of a solved N-1 pyramid. Known to be UNSAT for N=4. |
 | ConstructiveDiagonal | A recursive constructive approach that places a solved N-1 pyramid in the upper-left corner, and then adds the additional layer N blocks on top and to the bottom-right. Known to be UNSAT for N=5. |
 | ConstructiveTripleDiagonal | A partial constructive approach that hypothesizes that the 'triple' blocks (i.e. those with only one unique label (0,0,0), (1,1,1), (2,2,2) etc.) should be placed along the diagonal of the bottom layer. Known to be SAT for N <= 5. |
+| ZRing | A partial constructive approach that assigns the outermost Z-axis labels, where the pyramid height is 1 cube. Lacks an explicit justification. |
+| YStep | A partial constructive approach that assigns all of the Y-axis labels. Known to work up to N=5. |
+| XStep | A variation on YStep applied to the X-axis labels. Using XStep and YStep in combination is UNSAT for N=3. |
 
-The fastest known configuration is to use the ConstructiveTripleDiagonal strategy by itself.
+### Finite Domain Encoding
+
+The program includes a **--finite-domain** parameter which can be set to either **int** or **enum**. The default **int** uses Z3 bounded integer variables for the axis labels. Using **enum** causes the program to use an EnumSort instead. Not all symmetry breaking strategies are compatible with enum due to the lack of an ordering.
+
+The Z3 solver tactic can also be changed with the **--tactic** parameter. Allowable values are qffd, qflia, and z3-default.
+
+The fastest known configuration is to use the ConstructiveTripleDiagonal and YStep strategies together with the **enum** finite domain encoding. Kissat can solve an N=5 pyramid with this configuration in about 30 seconds.
 
 ![Cake Slice Symmetry: the positions of the blue and green slices can be swapped without changing any of the purple cubes.](doc/cake_slices.png)
 

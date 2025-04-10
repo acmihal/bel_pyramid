@@ -33,7 +33,7 @@ def export_cnf(formulation, solver, filename):
     goal = Goal()
     goal.add(solver.assertions())
 
-    # Apply a set of tactics to convert a purely CNF formulation.
+    # Apply a set of tactics to convert to a purely CNF formulation.
     tactic = Then('lia2card', 'dt2bv', With('card2bv', 'pb.solver', 'totalizer'), 'bit-blast', 'tseitin-cnf')
     subgoal = tactic(goal)
     formulas = subgoal[0]
