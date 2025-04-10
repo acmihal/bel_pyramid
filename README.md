@@ -8,7 +8,9 @@ Solutions for Bel's Pyramid up to N=5 are currently known. It is hypothesized th
 ![Example Pyramid](doc/example.png)
 
 The example in the diagram above shows the geometry of a solved pyramid with N=3 layers. Each layer $n\in[0,N)$ is a square with side length $2n+1$. The layers are aligned vertically along their center cubes to create a symmetric step pyramid. The total number of cubes in the pyramid is:
+
 $$\sum_{n=0}^{N-1}(2n+1)^2 = \frac{1}{3}N(4N^2-1)$$
+
 The N=3 cube in the diagram therefore has 1 + 9 + 25 = 35 cubes.
 
 ## Cube Labels
@@ -169,7 +171,8 @@ The Z3 solver tactic can also be changed with the **--tactic** parameter. Allowa
 
 The fastest known configuration is to use the ConstructiveTripleDiagonal and YStep strategies together with the **enum** finite domain encoding. Kissat can solve an N=5 pyramid with this configuration in about 30 seconds.
 
-![Cake Slice Symmetry: the positions of the blue and green slices can be swapped without changing any of the purple cubes.](doc/cake_slices.png)
+Figure: Cake Slice Symmetry. The blue and green slices can be swapped without changing any of the purple cubes.
+![Cake Slice Symmetry](doc/cake_slices.png)
 
 ## Proposed Benchmarks
 
