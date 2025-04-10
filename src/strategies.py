@@ -142,6 +142,18 @@ def strategy_face_pble_constraints(formulation):
         constraints.append(PbLe([(formulation.hvar_matrix[y][x]==label, formulation.matrix_height[y][x]) for x, y in product(range(formulation.base), range(formulation.base))], faces))
     return constraints
 
+def strategy_z_ring(formulation):
+    return [And([formulation.hvar_matrix[y][0] == formulation.label_tuple[y] for y in range(formulation.base)]),
+            And([formulation.hvar_matrix[-1][x] == formulation.label_tuple[-1] for x in range(formulation.base)]),
+            And([formulation.hvar_matrix[y][-1] == formulation.label_tuple[y] for y in range(formulation.base)]),
+            And([formulation.hvar_matrix[0][x] == formulation.label_tuple[0] for x in range(formulation.base)])]
+
+def strategy_y_step(formulation):
+    return [And(yvar==formulation.label_tuple[y+h]) for y, yvar_list in enumerate(formulation.yvar_triangle) for h, yvar in enumerate(yvar_list)]
+
+def strategy_x_step(formulation):
+    return [And(xvar==formulation.label_tuple[x-h]) for x, xvar_list in enumerate(formulation.xvar_triangle) for h, xvar in enumerate(xvar_list)]
+
 StrategyMap = {'BottomCenter012': strategy_bottom_center_012,
                'TopCubeOrdering': strategy_top_cube_ordering,
                'ConstructiveTripleDiagonal': strategy_constructive_triple_diagonal,
@@ -154,5 +166,8 @@ StrategyMap = {'BottomCenter012': strategy_bottom_center_012,
                'LabelPermutation': strategy_label_permutation,
                'LabelPermutationImportance': strategy_label_permutation_importance,
                'FacePBEQ': strategy_face_pbeq_constraints,
-               'FacePBLE': strategy_face_pble_constraints}
+               'FacePBLE': strategy_face_pble_constraints,
+               'ZRing': strategy_z_ring,
+               'YStep': strategy_y_step,
+               'XStep': strategy_x_step}
 
