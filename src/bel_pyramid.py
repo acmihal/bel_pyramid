@@ -53,7 +53,6 @@ def main():
     # Apply strategies in order.
     if args.strategy is not None:
         print()
-        strategy_functions = [StrategyMap[strategy] for strategy in args.strategy]
         for strategy in args.strategy:
             constraints = StrategyMap[strategy](f)
             solver.add(constraints)
