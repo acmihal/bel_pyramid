@@ -102,7 +102,6 @@ def main():
         print()
         f.print_model(model)
 
-        correct = f.validate_model(model)
         assert f.validate_model(model), "Solution validation failed."
 
     else:
