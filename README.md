@@ -171,8 +171,8 @@ The Z3 solver tactic can also be changed with the **--tactic** parameter. Allowa
 
 The fastest known configuration is to use the ConstructiveTripleDiagonal and YStep strategies together with the **enum** finite domain encoding. Kissat can solve an N=5 pyramid with this configuration in about 30 seconds.
 
-Figure: Cake Slice Symmetry. The blue and green slices can be swapped without changing any of the purple cubes.
 ![Cake Slice Symmetry](doc/cake_slices.png)
+Figure: "Cake Slice" symmetry. The blue and green slices can be swapped without changing any of the purple cubes.
 
 ## Proposed Benchmarks
 
@@ -193,7 +193,7 @@ A set of hand-selected benchmarks for measuring the performance of SAT solvers c
 | bp5_lp_ctd | SAT | 657.63 |
 | bp5_ystep_ctd | SAT | 306.68 |
 | bp5_ystep_ctd_enum | SAT | 33.52 |
-| bp5_ystem_zring | SAT | 129.88 |
+| bp5_ystep_zring | SAT | 129.88 |
 
 ## Example Solutions
 
