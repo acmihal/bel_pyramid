@@ -20,3 +20,5 @@ bel_pyramid 4 --strategy AntiMirror --cnf benchmarks/bp4_am.cnf --skip-solver
 bel_pyramid 5 --strategy LabelPermutation --strategy ConstructiveTripleDiagonal --cnf benchmarks/bp5_lp_ctd.cnf --skip-solver
 EOF
 
+gzip benchmarks/*.cnf
+

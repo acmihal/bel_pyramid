@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 
-ls benchmarks/*.cnf | parallel kissat {} ">" {.}.cert
+ls benchmarks/*.cnf.gz | parallel kissat {} ">" {.}.cert
