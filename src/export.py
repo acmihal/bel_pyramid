@@ -38,89 +38,61 @@ def export_cnf(formulation, solver, filename):
     subgoal = tactic(goal)
     formulas = subgoal[0]
 
-    # Collect all variables in all formulas.
-    all_vars = set()
-    num_false_formulas = 0
-    for f in tqdm(formulas, desc="Variable Enumeration"):
+    # Map import_vars from the formulation to integers starting at 1.
+    # All other variables will be added dynamically during formula traversal.
+    var_to_ix_map = {str(var):ix for ix, var in enumerate(formulation.import_vars(), start=1)}
+
+    # Lines in the CNF output, as lists of integer lits, without the 0 terminators.
+    cnf = []
+
+    # Formula traversal can be slow.
+    for f in tqdm(formulas, desc="CNF Export"):
         #print_formula(f)
         num_args = f.num_args()
         if num_args == 0:
+            lit = var_to_ix_map.setdefault(f.decl().name(), len(var_to_ix_map) + 1)
             if is_false(f):
                 print(f'Tactics reduced formula to False. Problem is UNSAT.')
-                num_false_formulas = num_false_formulas + 1
+                cnf.extend([[lit], [-lit]])
             else:
                 # Formula is a single positive literal.
                 assert f.kind() == Z3_OP_UNINTERPRETED, f'Tactics left unexpected formula:\n{print_formula(f)}'
-            all_vars.add(f.decl().name())
+                cnf.append([lit])
         elif num_args == 1:
             # Formula is a single negative literal.
             assert is_not(f), f'Tactics left unexpected formula:\n{print_formula(f)}'
-            all_vars.add(f.arg(0).decl().name())
+            lit = var_to_ix_map.setdefault(f.arg(0).decl().name(), len(var_to_ix_map) + 1)
+            cnf.append([-lit])
         else:
             # Formula is an Or of multiple literals.
             assert is_or(f), f'Tactics left unexpected formula:\n{print_formula(f)}'
+            literals = []
             for arg_ix in range(num_args):
                 arg = f.arg(arg_ix)
                 num_subargs = arg.num_args()
                 if num_subargs == 0:
                     # Positive literal.
                     assert arg.kind() == Z3_OP_UNINTERPRETED, f'Tactics left unexpected formula:\n{print_formula(arg)}'
-                    all_vars.add(arg.decl().name())
+                    lit = var_to_ix_map.setdefault(arg.decl().name(), len(var_to_ix_map) + 1)
+                    literals.append(lit)
                 else:
                     # Negative literal
                     assert is_not(arg), f'Tactics left unexpected formula:\n{print_formula(arg)}'
-                    all_vars.add(arg.arg(0).decl().name())
+                    lit = var_to_ix_map.setdefault(arg.arg(0).decl().name(), len(var_to_ix_map) + 1)
+                    literals.append(-lit)
+            cnf.append(literals)
 
-    # Split all the CNF vars into the placement/nonplacement groups.
-    placement_vars = []
-    nonplacement_vars = []
-    for var in all_vars:
-        if formulation.placement_var_by_name(var) is not None:
-            placement_vars.append(var)
-        else:
-            nonplacement_vars.append(var)
-
-    # Map sorted placement vars to integers starting at 1.
-    # Nonplacement vars are numbered after the placement vars and don't need to be sorted.
-    # Enumerating the variables this way allows import to work even if the tactic or finite-domain sort changes.
-    var_to_ix_map = {var:ix for ix, var in enumerate(sorted(placement_vars) + nonplacement_vars, start=1)}
-
+    # Write out the CNF file.
     with open(filename, 'w', encoding='ascii') as cnf_file:
         # Write cnf header
         cnf_file.write(f"c {' '.join(sys.argv)}\n")
-        cnf_file.write(f"p cnf {len(var_to_ix_map)} {len(formulas) + num_false_formulas}\n")
-
-        for f in tqdm(formulas, desc="Formula Generation"):
-            literals = []
-            num_args = f.num_args()
-            if num_args == 0:
-                if is_false(f):
-                    cnf_file.write(f'{var_to_ix_map[f.decl().name()]} 0\n')
-                    cnf_file.write(f'{-var_to_ix_map[f.decl().name()]} 0\n')
-                    continue
-                else:
-                    # Formula is a single positive literal.
-                    literals.append(var_to_ix_map[f.decl().name()])
-            elif num_args == 1:
-                # Formula is a single negative literal.
-                literals.append(-var_to_ix_map[f.arg(0).decl().name()])
-            else:
-                for arg_ix in range(num_args):
-                    arg = f.arg(arg_ix)
-                    num_subargs = arg.num_args()
-                    if num_subargs == 0:
-                        # Positive literal.
-                        literals.append(var_to_ix_map[arg.decl().name()])
-                    else:
-                        # Netagive literal.
-                        literals.append(-var_to_ix_map[arg.arg(0).decl().name()])
-
-            cnf_file.write(' '.join(map(str, literals)) + ' 0\n')
+        cnf_file.write(f"p cnf {len(var_to_ix_map)} {len(cnf)}\n")
+        for f in cnf:
+            cnf_file.write(' '.join(map(str, f)) + ' 0\n')
 
 def import_certificate(formulation, filename):
-    # Sorting all of the placement bvars in the formulation by name should match the numbering used in the CNF export.
     # One additional list element at the beginning is necessary because CNF starts numbering at 1, not 0.
-    sorted_placement_bvars = [None] + sorted(formulation.placement_bvar_map.values(), key=lambda var: str(var))
+    import_vars = [None] + formulation.import_vars()
 
     assertions = []
 
@@ -132,10 +104,10 @@ def import_certificate(formulation, filename):
             elif line.startswith("v "):
                 var_list = line.rstrip().split()
                 for assignment in map(int, var_list[1:]):
-                    if 0 < assignment and assignment < len(sorted_placement_bvars):
-                        assertions.append(sorted_placement_bvars[assignment])
-                    elif 0 < -assignment and -assignment < len(sorted_placement_bvars):
-                        assertions.append(Not(sorted_placement_bvars[-assignment]))
+                    if 0 < assignment and assignment < len(import_vars):
+                        assertions.append(import_vars[assignment])
+                    elif 0 < -assignment and -assignment < len(import_vars):
+                        assertions.append(Not(import_vars[-assignment]))
 
     return assertions
 

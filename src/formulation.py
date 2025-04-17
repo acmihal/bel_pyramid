@@ -1,5 +1,4 @@
 from itertools import chain, combinations_with_replacement, permutations, product
-import re
 from z3 import And, AtLeast, AtMost, Bool, Const, EnumSort, IntSort
 
 class Formulation:
@@ -56,9 +55,6 @@ class Formulation:
                                    for rotation_ix, rotation in enumerate(rotation_list)
                                    for x,y,h in self.xyh_list}
 
-        self.placement_var_regex = "^c(\d+)_r(\d+)_x(\d+)_y(\d+)_h(\d+)$"
-        self.placement_var_regex_prog = re.compile(self.placement_var_regex)
-
     # Key for sorting label_sort values by position in label_tuple.
     def sort_key(self, val):
         if isinstance(val, tuple):
@@ -78,14 +74,9 @@ class Formulation:
     def placement_var(self, cube_ix, rotation_ix, x, y, h):
         return self.placement_bvar_map[(cube_ix, rotation_ix, x, y, h)]
 
-    # Helper to fetch placement bvar by name.
-    def placement_var_by_name(self, var_str):
-        result = self.placement_var_regex_prog.fullmatch(var_str)
-        if result is not None:
-            key = tuple(int(x) for x in result.groups())
-            return self.placement_bvar_map.get(key, None)
-        else:
-            return None
+    # Variables that the formulation wants to import from a certificate.
+    def import_vars(self):
+        return sorted(self.placement_bvar_map.values(), key=lambda var: str(var))
 
     def get_constraints(self):
         self.axis_label_bounds = []
