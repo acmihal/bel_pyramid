@@ -39,8 +39,11 @@ def export_cnf(formulation, solver, filename):
     formulas = subgoal[0]
 
     # Map import_vars from the formulation to integers starting at 1.
-    # All other variables will be added dynamically during formula traversal.
     var_to_ix_map = {str(var):ix for ix, var in enumerate(formulation.import_vars(), start=1)}
+
+    # All other variables will be added dynamically during formula traversal.
+    def get_lit(name):
+        return var_to_ix_map.setdefault(name, len(var_to_ix_map) + 1)
 
     # Lines in the CNF output, as lists of integer lits, without the 0 terminators.
     cnf = []
@@ -50,19 +53,18 @@ def export_cnf(formulation, solver, filename):
         #print_formula(f)
         num_args = f.num_args()
         if num_args == 0:
-            lit = var_to_ix_map.setdefault(f.decl().name(), len(var_to_ix_map) + 1)
             if is_false(f):
                 print(f'Tactics reduced formula to False. Problem is UNSAT.')
+                lit = get_lit(f.decl().name())
                 cnf.extend([[lit], [-lit]])
             else:
                 # Formula is a single positive literal.
                 assert f.kind() == Z3_OP_UNINTERPRETED, f'Tactics left unexpected formula:\n{print_formula(f)}'
-                cnf.append([lit])
+                cnf.append([get_lit(f.decl().name())])
         elif num_args == 1:
             # Formula is a single negative literal.
             assert is_not(f), f'Tactics left unexpected formula:\n{print_formula(f)}'
-            lit = var_to_ix_map.setdefault(f.arg(0).decl().name(), len(var_to_ix_map) + 1)
-            cnf.append([-lit])
+            cnf.append([-get_lit(f.arg(0).decl().name())])
         else:
             # Formula is an Or of multiple literals.
             assert is_or(f), f'Tactics left unexpected formula:\n{print_formula(f)}'
@@ -73,13 +75,11 @@ def export_cnf(formulation, solver, filename):
                 if num_subargs == 0:
                     # Positive literal.
                     assert arg.kind() == Z3_OP_UNINTERPRETED, f'Tactics left unexpected formula:\n{print_formula(arg)}'
-                    lit = var_to_ix_map.setdefault(arg.decl().name(), len(var_to_ix_map) + 1)
-                    literals.append(lit)
+                    literals.append(get_lit(arg.decl().name()))
                 else:
                     # Negative literal
                     assert is_not(arg), f'Tactics left unexpected formula:\n{print_formula(arg)}'
-                    lit = var_to_ix_map.setdefault(arg.arg(0).decl().name(), len(var_to_ix_map) + 1)
-                    literals.append(-lit)
+                    literals.append(-get_lit(arg.arg(0).decl().name()))
             cnf.append(literals)
 
     # Write out the CNF file.
