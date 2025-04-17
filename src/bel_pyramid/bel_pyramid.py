@@ -1,7 +1,7 @@
 import argparse
-from export import export_cnf, export_smt2, import_certificate
-from formulation import Formulation
-from strategies import StrategyMap
+from bel_pyramid.export import export_cnf, export_smt2, import_certificate
+from bel_pyramid.formulation import Formulation
+from bel_pyramid.strategies import StrategyMap
 import time
 from z3 import Solver, Tactic, sat
 

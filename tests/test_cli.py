@@ -1,4 +1,4 @@
-from bel_pyramid import main
+from bel_pyramid.bel_pyramid import main
 from io import StringIO
 from unittest.mock import patch
 import pytest
