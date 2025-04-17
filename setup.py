@@ -8,7 +8,7 @@ setup(
     install_requires=['z3-solver', 'tqdm'],
     entry_points={
         'console_scripts': [
-            'bel_pyramid=bel_pyramid.bel_pyramid:main',
+            'bel_pyramid=bel_pyramid.main:main',
         ],
     },
 )
