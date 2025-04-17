@@ -44,8 +44,6 @@ def main():
     # Add constraints from the formulation to the solver.
     constraints_start_time = time.process_time()
     solver.add(f.get_constraints())
-    constraints_end_time = time.process_time()
-    constraints_elapsed_time = constraints_end_time - constraints_start_time
 
     print()
     f.print_constraint_stats()
@@ -53,14 +51,18 @@ def main():
     # Apply strategies in order.
     if args.strategy is not None:
         print()
+        print(f'Strategies:')
         for strategy in args.strategy:
             constraints = StrategyMap[strategy](f)
             solver.add(constraints)
-            print(f'Strategy {strategy} applied {len(constraints)} constraint(s).', flush=True)
+            print(f'    {strategy} applied {len(constraints)} constraint(s).', flush=True)
+
+    constraints_end_time = time.process_time()
+    constraints_elapsed_time = constraints_end_time - constraints_start_time
 
     print()
     print(f'Constraint formulation built in {constraints_elapsed_time:.2f} seconds.', flush=True)
- 
+
     if args.smt2 is not None:
         print()
         print(f'Exporting formulation to SMT2 file "{args.smt2}".', flush=True)
@@ -81,6 +83,9 @@ def main():
         certificate_assertions = import_certificate(f, args.certificate)
         solver.add(certificate_assertions)
         print(f'Certificate applied {len(certificate_assertions)} assertion(s).', flush=True)
+        if len(certificate_assertions) == 0:
+            print(f'No assertions found in certificate. Skipping solver.')
+            return
 
     if args.skip_solver:
         print()
