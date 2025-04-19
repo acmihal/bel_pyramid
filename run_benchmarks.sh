@@ -3,4 +3,6 @@
 ls benchmarks/*.cnf.gz | parallel --plus kissat {} ">" {..}.cert
 
 # Sort results by Kissat process-time.
-grep -H process-time benchmarks/*.cert | awk '{print $1, $(NF-1)}' | sort -n -k 2 > benchmarks/sorted_runtimes.txt
+find benchmarks -type f -name \*.cert \
+| xargs -n 128 awk '/SIGINT/{R="SIGINT"} /s UNSAT/{R="UNSAT"} /s SAT/{R="SAT"} /process-time/{print FILENAME,R,$(NF-1)}' \
+| sort -nk3 > benchmarks/sorted_runtimes.txt
