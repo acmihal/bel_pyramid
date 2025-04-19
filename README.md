@@ -182,20 +182,46 @@ A set of hand-selected benchmarks for measuring the performance of SAT solvers c
 
 | Benchmark | Satisfiable? | Kissat Runtime (seconds) |
 | --- | --- | --- |
-| bp4 | SAT | 10.26 |
-| bp4_am | SAT | 2.73 |
-| bp4_cbottom | UNSAT | 60.73 |
-| bp4_cdiag | SAT | 4.58 |
-| bp4_cshell | UNSAT | 18.09 |
-| bp4_enum | SAT | 12.19 |
-| bp4_lp | SAT | 26.46 |
-| bp4_zring_ctd | SAT | 100.02 |
-| bp5_ctd | SAT | 233.16 |
-| bp5_ctd_enum | SAT | 183.81 |
-| bp5_lp_ctd | SAT | 657.63 |
-| bp5_ystep_ctd | SAT | 306.68 |
-| bp5_ystep_ctd_enum | SAT | 33.52 |
-| bp5_ystep_zring | SAT | 129.88 |
+| bp4_CB_FPBEQ_FPBLE | UNSAT | 122.08 |
+| bp4_CSO_LP_FPBLE_ZR_YS | UNSAT | 137.76 |
+| bp4_TCO_CSO_LP_FPBLE_ZR_YS | UNSAT | 149.10 |
+| bp4_BC012_TCO_AM_IXA_LP_FPBLE | UNSAT | 160.70 |
+| bp4_BC012_CSO_IXA_LP_FPBLE | UNSAT | 163.91 |
+| bp4_BC012_CSO_IXA_LP | UNSAT | 167.03 |
+| bp4_CSO_AM_IXA_LP | UNSAT | 169.62 |
+| bp4_TCO_CB_LP | UNSAT | 178.75 |
+| bp4_TCO_CB_LP_FPBLE | UNSAT | 226.60 |
+| bp4_CB_LP_FPBLE | UNSAT | 228.29 |
+| bp4_BC012_AM_IXA_LPI | UNSAT | 297.89 |
+| bp4_CB_CSO_LP_FPBEQ_FPBLE | UNSAT | 361.87 |
+| bp4_BC012_CSO_AM_IXA | UNSAT | 432.17 |
+| bp4_BC012_TCO_AM_IXA | UNSAT | 465.16 |
+| bp4_TCO_CSO_AM_IXA | UNSAT | 501.96 |
+| bp4_BC012_TCO_IXA_LPI | UNSAT | 526.81 |
+| bp4_BC012_AM_IXA_FPBLE | UNSAT | 531.69 |
+| bp4_TCO_AM_IXA_FPBLE | UNSAT | 590.05 |
+| bp4_AM_IXA_FPBLE | UNSAT | 613.97 |
+| bp4_BC012_IXA_LPI_FPBLE | UNSAT | 1300.15 |
+| bp5_CSO | SAT | 307.11 |
+| bp4_CSO_IXA_LP_FPBEQ_ZR | SAT | 332.09 |
+| bp4_CSO_IXA_ZR | SAT | 399.80 |
+| bp5 | SAT | 406.70 |
+| bp4_BC012_TCO_CSO_LP_FPBEQ_ZR | SAT | 456.41 |
+| bp4_CTD_IXA_ZR | SAT | 501.74 |
+| bp4_TCO_IXA_FPBLE_ZR | SAT | 599.86 |
+| bp4_IXA_FPBEQ_ZR | SAT | 618.89 |
+| bp4_BC012_CSO_FPBEQ_FPBLE_ZR | SAT | 670.04 |
+| bp4_CSO_IXA_LP_FPBEQ_FPBLE_ZR | SAT | 670.76 |
+| bp4_TCO_CSO_ZR | SAT | 1291.05 |
+| bp4_CSO_IXA_FPBLE_ZR | SAT | 1295.58 |
+| bp4_BC012_TCO_AM_FPBEQ_ZR | SAT | 1473.43 |
+| bp4_BC012_CSO_AM_FPBEQ_FPBLE_ZR | SAT | 1486.79 |
+| bp4_LPI_FPBEQ_ZR | SAT | 2297.07 |
+| bp4_BC012_AM_FPBEQ_ZR | SAT | 2358.06 |
+| bp4_TCO_CSO_IXA_LP_ZR | SAT | 2527.10 |
+| bp4_BC012_LP_FPBEQ_ZR | SAT | 2752.41 |
+| bp4_TCO_LP_FPBEQ_ZR | SAT | 3021.80 |
+| bp4_BC012_TCO_LP_FPBLE_ZR | SAT | 3309.40 |
 
 ## Example N=5 Solution
 
