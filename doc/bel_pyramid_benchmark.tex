@@ -134,7 +134,7 @@ The ``new base layer'' approach (Fig.~\ref{constructive_bottom}) takes a solved 
 An $N$\nobreakdash-layer pyramid has two additional labels compared to an $N-1$ pyramid.
 All of the cubes with the two new labels must be located on the new bottom layer.
 The same property applies for each layer up to the top of the pyramid, which must be the trivial $N=1$ subproblem with the single cube $(0,0,0)$.
-This recursive approach works only for $N$ up to 3 and is UNSAT for $N=4$, proving that this strategy cannot be the basis of a generic solution.
+This recursive approach works only for $N$ up to 3 and is UNSAT for $N=4$, proving that this strategy cannot be the basis of a general solution.
 
 \subsection{Adding a New Top Shell}
 
@@ -156,7 +156,7 @@ Labels on the longest axes control the most number of cubes and may hypothetical
 variables on the front and right faces of the pyramid.
 There is an additional geometric symmetry that allows entire vertical slices of the pyramid on opposite sides of the centerline to be
 swapped without affecting any other cubes.
-This one can be broken with ordering constraints between pairs of axis labels on the same face of the pyramid.
+%This one can be broken with ordering constraints between pairs of axis labels on the same face of the pyramid.
 \item A few types of lookahead constraints are considered to prevent the seach from exploring subspaces where too many axes have been
 assigned to the same label, such that there aren't enough blocks with that label to fill all of the spaces along those axes.
 \item In addition to the infeasible recursive constructive strategies described earlier, there are also options for \emph{partial} constructive strategies
@@ -173,8 +173,9 @@ $N=5$ pyramids with partial constructive strategies to limit the search space ta
 Even with the fastest known combination of strategies, no $N=6$ pyramid has yet been solved.
 Up to a week of runtime using ParKissat-RS on a 32-thread machine has been attempted.
 
-The proposed benchmarks use combinations of pyramid sizes and symmetry-breaking strategies to provide variations in difficulty in the one-to-ten minute range.
+The proposed benchmarks use combinations of pyramid sizes and symmetry-breaking strategies to provide variations in difficulty in the 1--60 minute range.
 UNSAT instances that disprove a selection of recursive constructive strategies are also included.
+Mutually-incompatible combinations of symmetry strategies also provide interesting UNSAT instances.
 
 \begin{thebibliography}{0}
 \bibitem{b1} A. Mihal. ``Bel's Pyramid Puzzle,'' 2025, GitHub repository. [Online]. Available: https://github.com/acmihal/bel\_pyramid

@@ -2,7 +2,7 @@
 
 Bel's Pyramid is a recreational mathematics puzzle invented by Dr. Belgacem Haba. The puzzle involves stacking cubes to create a square step pyramid, under the constraint that adjacent cube faces must have the same label. The cube faces are labeled in a special way that is detailed below. The pyramid has a certain number of layers N. This program searches for solutions using Boolean Satisfiability (SAT).
 
-Solutions for Bel's Pyramid up to N=5 are currently known. It is hypothesized that multiple solutions exist for every N, but as of this writing, there is no known constructive approach for generating any solution for an arbitrary N. All known solutions for non-trivial values of N have been discovered using search (specifically SAT). SAT has been able to prove that some proposed constructive approaches are infeasible.
+Solutions for Bel's Pyramid up to N=5 are currently known. It is hypothesized that multiple solutions exist for every N, but as of this writing, there is no known constructive approach for generating any solution for an arbitrary N. All known solutions for non-trivial values of N have been discovered using search (specifically SAT). SAT has been able to prove that some proposed constructive approaches are infeasible. The end goal is to find a general solution.
 
 ## Problem Description
 ![Example Pyramid](doc/example.png)
@@ -23,7 +23,7 @@ $$\left(\binom{2N-1}{3}\right) = \binom{(2N-1)+3-1}{3} = \frac{1}{3}N(2N-1)(2N+1
 
 For convenience we use the set of integers $[0, 2N-1)$ to represent the labels, but they can be arbitrary distinct symbols.
 
-Note that a permutation of the label tuple $(a,b,c)$ (e.g. $(c,a,b)$) corresponds to a spatial rotation of a cube, and is not a separate cube. Cubes with three different labels have 6 possible rotations, but cubes with repeated labels have fewer distinguishable rotations.
+Note that a permutation of the label tuple $(a,b,c)$, e.g. $(c,a,b)$, corresponds to a spatial rotation of a cube, and is not a separate cube. Cubes with three different labels have 6 possible rotations, but cubes with repeated labels have fewer distinguishable rotations.
 
 For the N=3 pyramid the 35 cubes are labeled from the set $[0,5)$ as follows:
 
@@ -82,6 +82,8 @@ Ideally, we could find an algorithmic process for constructing solutions for any
 
 ### Adding a New Base Layer
 
+![Constructive Bottom Strategy](doc/constructive_bottom.png)
+
 The "new base layer" approach takes a solved pyramid with N-1 layers and adds the next layer of size $(2N-1) \times (2N-1)$ underneath it. An N-layer pyramid has two additional labels compared to an N-1 pyramid. This means that all of the cubes with the two new labels must be located on the new bottom layer. This property applies for each layer up to the top of the pyramid. In general, layer $n$ can only use cubes with labels $l < 2n+1$ The cube at the top of the pyramid is the trivial N=1 subproblem with the cube (0,0,0).
 
 This recursive approach works only for N up to 3 and is UNSAT for N=4. Here is a solution for N=3:
@@ -135,7 +137,7 @@ A certificate produced by an external solver can be reimported to print the solu
 
 ## Details
 
-**bel_pyramid** is implemented in Python using Z3Py. The constraint formulation uses bounded integer variables for the axis label assignments, and Boolean variables to indicate that a cube is placed at a certain coordinate with a certain rotation. There are only two types of constraints: a cube uniqueness constraint asserts that each cube must be placed at exactly one coordinate with one rotation. This is an exactly-1 cardinality constraint over the Boolean placement variables for each cube. The second type of constraint asserts that a conjunction of three orthogonal axis assignments are equivalent to one of the Boolean placement variables.
+**bel_pyramid** is implemented in Python using Z3Py. The constraint formulation uses bounded integer variables (optionally enumeration sorts) for the axis label assignments, and Boolean variables to indicate that a cube is placed at a certain coordinate with a certain rotation. There are only two types of constraints: a cube uniqueness constraint asserts that each cube must be placed at exactly one coordinate with one rotation. This is an exactly-1 cardinality constraint over the Boolean placement variables for each cube. The second type of constraint asserts that a conjunction of three orthogonal axis assignments are equivalent to one of the Boolean placement variables.
 
 A collection of experimental symmetry-breaking strategies is available via the **--strategy** parameter. Multiple strategies can be used in combination. Not all strategies are mutually compatible and may result in UNSAT configurations.
 
@@ -195,166 +197,8 @@ A set of hand-selected benchmarks for measuring the performance of SAT solvers c
 | bp5_ystep_ctd_enum | SAT | 33.52 |
 | bp5_ystep_zring | SAT | 129.88 |
 
-## Example Solutions
+## Example N=5 Solution
 
-### N=1
-
-    # bel_pyramid 1
-    Solving Bel's Pyramid for 1 levels.
-
-    Parameters:
-        Levels: 1
-        Level Sizes: [1]
-        Level Cubes: [1]
-        Total Cubes: 1
-        Labels: [0]
-        Label Sort: Int
-
-    Variables:
-        X Axis Variables: 1
-        Y Axis Variables: 1
-        Z Axis Variables: 1
-        Placement Variables: 1
-
-    Constraints:
-        Axis Label Bounds: 3
-        Placement Equalities: 1
-        Cube Uniqueness Constraints: 1
-
-    Constraint formulation built in 0.00 seconds.
-
-    Starting solver with tactic "qffd".
-    Solver finished in 0.00 seconds.
-
-    Solution:
-    +----+
-    |  0 |  0
-    +----+
-       0
-
-### N=2
-
-    # bel_pyramid 2
-    Solving Bel's Pyramid for 2 levels.
-
-    Parameters:
-        Levels: 2
-        Level Sizes: [1, 3]
-        Level Cubes: [1, 9]
-        Total Cubes: 10
-        Labels: [0, 1, 2]
-        Label Sort: Int
-
-    Variables:
-        X Axis Variables: 4
-        Y Axis Variables: 4
-        Z Axis Variables: 9
-        Placement Variables: 270
-
-    Constraints:
-        Axis Label Bounds: 17
-        Placement Equalities: 270
-        Cube Uniqueness Constraints: 10
-
-    Constraint formulation built in 0.05 seconds.
-
-    Starting solver with tactic "qffd".
-    Solver finished in 0.01 seconds.
-
-    Solution:
-    +----------+
-    |  1  2  1 |  1
-    |  0  2  0 |  0  0
-    |  1  2  1 |  2
-    +----------+
-       1  2  0
-          0
-
-### N=3
-
-    # bel_pyramid 3
-    Solving Bel's Pyramid for 3 levels.
-
-    Parameters:
-        Levels: 3
-        Level Sizes: [1, 3, 5]
-        Level Cubes: [1, 9, 25]
-        Total Cubes: 35
-        Labels: [0, 1, 2, 3, 4]
-        Label Sort: Int
-
-    Variables:
-        X Axis Variables: 9
-        Y Axis Variables: 9
-        Z Axis Variables: 25
-        Placement Variables: 4375
-
-    Constraints:
-        Axis Label Bounds: 43
-        Placement Equalities: 4375
-        Cube Uniqueness Constraints: 35
-
-    Constraint formulation built in 0.68 seconds.
-
-    Starting solver with tactic "qffd".
-    Solver finished in 0.29 seconds.
-
-    Solution:
-    +----------------+
-    |  4  3  4  4  1 |  4
-    |  2  1  2  0  4 |  2  0
-    |  3  4  3  2  2 |  2  0  3
-    |  4  0  1  1  3 |  3  0
-    |  1  1  4  1  1 |  1
-    +----------------+
-       3  0  4  2  1
-          4  3  0
-             3
-
-### N=4
-    # bel_pyramid 4
-    Solving Bel's Pyramid for 4 levels.
-
-    Parameters:
-        Levels: 4
-        Level Sizes: [1, 3, 5, 7]
-        Level Cubes: [1, 9, 25, 49]
-        Total Cubes: 84
-        Labels: [0, 1, 2, 3, 4, 5, 6]
-        Label Sort: Int
-
-    Variables:
-        X Axis Variables: 16
-        Y Axis Variables: 16
-        Z Axis Variables: 49
-        Placement Variables: 28812
-
-    Constraints:
-        Axis Label Bounds: 81
-        Placement Equalities: 28812
-        Cube Uniqueness Constraints: 84
-
-    Constraint formulation built in 4.00 seconds.
-
-    Starting solver with tactic "qffd".
-    Solver finished in 3.05 seconds.
-
-    Solution:
-    +----------------------+
-    |  6  2  2  6  6  1  3 |  2
-    |  0  0  0  6  5  0  1 |  0  2
-    |  4  4  6  4  1  4  1 |  6  1  6
-    |  2  3  6  2  1  3  1 |  1  2  5  2
-    |  5  5  1  3  4  4  0 |  0  4  3
-    |  5  5  3  0  4  1  1 |  5  2
-    |  3  3  3  6  4  3  1 |  3
-    +----------------------+
-       5  3  6  6  4  0  1
-          5  3  0  2  4
-             5  4  5
-                2
-
-### N=5
 This example demonstrates exporting CNF, calling an external SAT solver, and reimporting the certificate for validation and solution printout.
 
     # bel_pyramid 5 --strategy ConstructiveTripleDiagonal --cnf bp5_ctd.cnf --skip-solver
